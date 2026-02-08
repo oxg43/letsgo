@@ -1,0 +1,19 @@
+{
+  "combo": {
+    "score_th": 0.04,
+    "mag_th": 0.001,
+    "pers_th": 0.0,
+    "min_snap": 30,
+    "window": 24
+  },
+  "stake_model": "flat",
+  "stake": 1.0,
+  "notify": false,
+  "poll_seconds": 120,
+  "odds_filter": {
+    "min": 1.20,
+    "max": 2.50
+  },
+  "alert_cooldown_hours": 2,
+  "scrape_days": 7
+}

@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+
+# Data & logs (generated)
+odds_data/
+*.db
+paper_trades_log.csv
+oneshot_output.txt
+suggested_combo.json
+
+# Reports (generated)
+reports/
+
+# Secrets
+secrets.json
+
+# OS
+Thumbs.db
+.DS_Store
+
+# pytest
+.pytest_cache/
