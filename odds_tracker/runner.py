@@ -29,6 +29,7 @@ from odds_tracker.config import (
     SCRAPE_INTERVAL_SECONDS, HEADLESS,
     DATA_DIR, REPORTS_DIR, PAGE_TIMEOUT_MS,
     get_oddsportal_url, get_tomorrow_url, get_clean_csv,
+    get_future_url, get_future_date,
 )
 from odds_tracker.database import (
     init_db, save_snapshot, save_live_snapshot, get_snapshot_count,
@@ -42,14 +43,56 @@ from odds_tracker.analyzer import analyze_match, get_movement_summary
 from odds_tracker.signals import generate_signals, format_signal, save_signals_to_db
 from odds_tracker.movement_logger import save_cycle_snapshot, generate_movement_summary
 from odds_tracker.signal_map import (
+    SIGNAL_MAP_DIR,
     write_live_signals, capture_final_bets, capture_zlatna_pravila,
-    format_golden_signal, format_zlatna_signal, print_signal_map,
+    capture_week_signals,
+    format_golden_signal, format_zlatna_signal, format_weekly_signal,
+    format_weekly_update,
+    print_signal_map,
 )
 from odds_tracker.match_watcher import check_and_alert
 from odds_tracker.value_betting import (
     analyze_prematch_value, analyze_all_live, format_value_bet, format_value_bet_short,
 )
 from odds_tracker.research import analyze_upcoming_match
+
+# ── Future match cache (persists between cycles) ──
+FUTURE_MATCH_CACHE = DATA_DIR / "future_match_cache.json"
+
+
+def _save_future_cache(future_matches: list[dict]):
+    """Save future match metadata so weekly signals run every cycle."""
+    import json
+    cache = []
+    seen = set()
+    for m in future_matches:
+        key = f"{m.get('home', '')}|{m.get('away', '')}"
+        if key not in seen:
+            seen.add(key)
+            cache.append({
+                'home': m.get('home', ''),
+                'away': m.get('away', ''),
+                'kick_off': m.get('kick_off', ''),
+                '_match_date': m.get('_match_date', ''),
+                'status': 'upcoming',
+            })
+    with open(FUTURE_MATCH_CACHE, 'w', encoding='utf-8') as f:
+        json.dump(cache, f, ensure_ascii=False)
+
+
+def _load_future_cache() -> list[dict]:
+    """Load cached future match data from last scrape."""
+    import json
+    if not FUTURE_MATCH_CACHE.exists():
+        return []
+    try:
+        with open(FUTURE_MATCH_CACHE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        # Filter out matches whose date has passed
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        return [m for m in data if m.get('_match_date', '') > today_str]
+    except Exception:
+        return []
 
 
 def run_one_cycle(cycle_num: int = 1, watch_list: list[str] | None = None, watch_edge: float | None = None, watch_delta: float | None = None, watch_conf: float | None = None) -> tuple[int, list[dict]]:
@@ -72,8 +115,8 @@ def run_one_cycle(cycle_num: int = 1, watch_list: list[str] | None = None, watch
         print("  ⚠ No matches scraped. Will retry next cycle.")
         return 0, []
 
-    # Also scrape tomorrow (every 5th cycle or first cycle)
-    if cycle_num == 1 or cycle_num % 5 == 0:
+    # Also scrape tomorrow — EVERY cycle for fresh data
+    if True:
         print(f"\n  Scraping tomorrow's matches ({tomorrow_url.split('/')[-2]})...")
         try:
             tomorrow_matches = scrape_odds(tomorrow_url, headless=HEADLESS, timeout_ms=PAGE_TIMEOUT_MS)
@@ -81,10 +124,31 @@ def run_one_cycle(cycle_num: int = 1, watch_list: list[str] | None = None, watch
                 # Mark them as tomorrow's
                 for m in tomorrow_matches:
                     m['_day'] = 'tomorrow'
+                    m['_match_date'] = get_future_date(1)
                 matches.extend(tomorrow_matches)
                 print(f"  [OK] +{len(tomorrow_matches)} tomorrow matches added")
         except Exception as e:
             print(f"  ⚠ Tomorrow scrape failed: {e}")
+
+    # Scrape future days (2-7 days ahead) — every 3rd cycle or first cycle
+    # These feed the WEEKLY_SIGNALS early-detection system
+    if cycle_num == 1 or cycle_num % 3 == 0:
+        for days_ahead in range(2, 8):
+            future_url = get_future_url(days_ahead)
+            future_date = get_future_date(days_ahead)
+            print(f"  Scraping +{days_ahead}d ({future_url.split('/')[-2]})...", end=' ')
+            try:
+                future_matches = scrape_odds(future_url, headless=HEADLESS, timeout_ms=PAGE_TIMEOUT_MS)
+                if future_matches:
+                    for m in future_matches:
+                        m['_day'] = f'+{days_ahead}d'
+                        m['_match_date'] = future_date
+                    matches.extend(future_matches)
+                    print(f"+{len(future_matches)} matches")
+                else:
+                    print("0 matches")
+            except Exception as e:
+                print(f"fail: {e}")
 
     if not matches:
         print("  ⚠ No matches scraped. Will retry next cycle.")
@@ -146,6 +210,17 @@ def run_one_cycle(cycle_num: int = 1, watch_list: list[str] | None = None, watch
     # ── 3. SIGNALS ──
     print("\n[3/3] Generating signals...")
     signals = generate_signals(upcoming)
+
+    # Propagate _match_date metadata from source matches to generated signals
+    match_date_lookup = {}
+    for m in upcoming:
+        if m.get('_match_date'):
+            key = (m.get('home', ''), m.get('away', ''))
+            match_date_lookup[key] = m['_match_date']
+    for s in signals:
+        key = (s.get('home', ''), s.get('away', ''))
+        if key in match_date_lookup:
+            s['_match_date'] = match_date_lookup[key]
 
     if signals:
         save_signals_to_db(signals)
@@ -269,7 +344,51 @@ def run_one_cycle(cycle_num: int = 1, watch_list: list[str] | None = None, watch
         print(f"  {'\u2500'*70}")
     else:
         # Always show status
-        print(f"  [ZLATNA] No new golden-rule bets this cycle (filters: STEAM/LATE_SHARP, >=80% conf, >=8% drop, >=30 snaps)")
+        print(f"  [ZLATNA] No new golden-rule bets this cycle (filters: STEAM/LATE_SHARP, >=90% conf, >=8% drop, no draws, odds<=3.50)")
+
+    # Capture WEEKLY SIGNALS — runs EVERY cycle (uses cache when futures aren't scraped)
+    try:
+        scraped_future = [m for m in matches if m.get('_match_date') and m.get('status') == 'upcoming']
+        if scraped_future:
+            # Fresh scrape available — update cache
+            _save_future_cache(scraped_future)
+            future_matches = scraped_future
+        else:
+            # No future pages this cycle — load from cache
+            future_matches = _load_future_cache()
+
+        if future_matches:
+            weekly_new, weekly_changed = capture_week_signals(future_matches)
+            if weekly_new or weekly_changed:
+                print(f"\n  {'='*70}")
+                if weekly_new:
+                    print(f"  📅📅📅 WEEKLY SIGNALS — {len(weekly_new)} NEW early bets!")
+                    for row in weekly_new:
+                        print(format_weekly_signal(row))
+                if weekly_changed:
+                    print(f"  📈📈📈 WEEKLY UPDATES — {len(weekly_changed)} signals with odds movement!")
+                    for row in weekly_changed:
+                        print(format_weekly_update(row))
+                print(f"  {'='*70}")
+            else:
+                # Count existing weekly signals from TSV
+                weekly_path = SIGNAL_MAP_DIR / f"WEEKLY_SIGNALS_{datetime.now().strftime('%Y-%m-%d')}.tsv"
+                existing_count = 0
+                if weekly_path.exists():
+                    try:
+                        with open(weekly_path, 'r', encoding='utf-8') as f:
+                            existing_count = sum(1 for _ in f) - 1  # minus header
+                    except Exception:
+                        pass
+                src = 'scraped' if scraped_future else 'cached'
+                print(f"  [WEEKLY] {len(future_matches)} future matches checked ({src}), "
+                      f"{existing_count} signals active, no changes this cycle")
+        else:
+            print(f"  [WEEKLY] No future match data yet — will populate on next future scrape")
+    except Exception as e:
+        import traceback
+        print(f"  ⚠ Weekly signals error: {e}")
+        traceback.print_exc()
 
     # ── 5. LIVE IN-PLAY SCRAPING + VALUE BETTING ──
     print(f"\n[LIVE] Scraping live in-play matches...")

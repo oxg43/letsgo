@@ -43,6 +43,17 @@ def get_tomorrow_url():
     return f"https://www.oddsportal.com/matches/football/{_tomorrow_compact()}/"
 
 
+def get_future_url(days_ahead: int) -> str:
+    """Return OddsPortal URL for N days in the future."""
+    future = (datetime.now() + timedelta(days=days_ahead)).strftime('%Y%m%d')
+    return f"https://www.oddsportal.com/matches/football/{future}/"
+
+
+def get_future_date(days_ahead: int) -> str:
+    """Return date string (YYYY-MM-DD) for N days in the future."""
+    return (datetime.now() + timedelta(days=days_ahead)).strftime('%Y-%m-%d')
+
+
 # Static fallbacks (used by direct import, refreshed at import time)
 CLEAN_CSV = get_clean_csv()
 ODDSPORTAL_BASE_URL = "https://www.oddsportal.com/matches/football/"
