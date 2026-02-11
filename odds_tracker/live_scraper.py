@@ -103,6 +103,11 @@ def _parse_live_text(text: str) -> list[dict]:
                         except ValueError:
                             pass
 
+                    # Skip finished matches (FT, ET, Pen, AET)
+                    if _is_finished_status(minute_str):
+                        i += advance
+                        continue
+
                     matches.append({
                         'minute': minute_str,
                         'home': home,
@@ -128,6 +133,11 @@ def _parse_live_text(text: str) -> list[dict]:
     return matches
 
 
+def _is_finished_status(minute_str: str) -> bool:
+    """Check if a minute indicator means the match is finished / no longer active."""
+    return minute_str.upper() in ('FT', 'ET', 'PEN.', 'PEN', 'AET')
+
+
 def _parse_minute(line: str) -> str | None:
     """
     Check if a line is a match-minute indicator.
@@ -135,7 +145,7 @@ def _parse_minute(line: str) -> str | None:
     Returns the minute string or None.
     """
     line = line.strip()
-    if line in ('HT', 'FT', 'ET', 'Break', 'Pen.', 'Pen'):
+    if line in ('HT', 'FT', 'ET', 'Break', 'Pen.', 'Pen', 'AET'):
         return line
     if re.fullmatch(r"\d+(?:\+\d*)?'", line):
         return line

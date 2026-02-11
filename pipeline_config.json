@@ -6,14 +6,28 @@
     "min_snap": 30,
     "window": 24
   },
-  "stake_model": "flat",
+  "stake_model": "kelly_quarter",
   "stake": 1.0,
+  "initial_bankroll": 100.0,
   "notify": false,
   "poll_seconds": 120,
   "odds_filter": {
-    "min": 1.20,
-    "max": 2.50
+    "min": 1.01,
+    "max": 3.50
   },
   "alert_cooldown_hours": 2,
-  "scrape_days": 7
+  "scrape_days": 7,
+  "tier_system": {
+    "enabled": true,
+    "actionable_window_minutes": 30,
+    "max_bets_per_match": 1,
+    "show_watch_signals": true
+  },
+  "staking": {
+    "mode": "kelly_quarter",
+    "max_stake_single_pct": 5.0,
+    "max_daily_exposure_pct": 20.0,
+    "stop_loss_daily_pct": 15.0,
+    "stop_loss_total_pct": 40.0
+  }
 }

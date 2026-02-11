@@ -1,5 +1,5 @@
-"""
-Comprehensive analysis of ZLATNA PRAVILA & FINAL_BETS signal outcomes.
+﻿"""
+Comprehensive analysis of NOVCI & FINAL_BETS signal outcomes.
 
 Cross-references signals from all dates with movement_log.csv final scores
 to determine win/loss/push for every pre-match signal.
@@ -12,7 +12,7 @@ Produces:
   - Score threshold optimization
   - Combined filter optimization grid
   - LIVE_VALUE signal performance (separate analysis)
-  - Suggested parameter tweaks for signal_map.py ZLATNA rules
+  - Suggested parameter tweaks for signal_map.py NOVCI rules
 """
 
 import csv
@@ -172,7 +172,7 @@ def find_score(scores: dict, match_str: str, kick_off: str) -> str | None:
 
 # ─── LOAD SIGNALS ──────────────────────────────────────────────
 
-def load_all_signals(file_pattern: str, is_zlatna: bool = False) -> list:
+def load_all_signals(file_pattern: str, is_NOVCI: bool = False) -> list:
     """Load all signal TSV files matching pattern."""
     signals = []
     
@@ -197,7 +197,7 @@ def load_all_signals(file_pattern: str, is_zlatna: bool = False) -> list:
 
 def run_analysis():
     print("\n" + "=" * 100)
-    print("  ZLATNA PRAVILA — COMPREHENSIVE SIGNAL ANALYSIS")
+    print("  NOVCI — COMPREHENSIVE SIGNAL ANALYSIS")
     print("  Cross-referencing signals with final match results")
     print("=" * 100)
 
@@ -208,9 +208,9 @@ def run_analysis():
     final_signals = load_all_signals("FINAL_BETS_*.tsv")
     print(f"\n  Loaded {len(final_signals)} FINAL_BETS signals across all dates")
 
-    # 3. Load ZLATNA_PRAVILA (filtered set)
-    zlatna_signals = load_all_signals("ZLATNA_PRAVILA_*.tsv", is_zlatna=True)
-    print(f"  Loaded {len(zlatna_signals)} ZLATNA_PRAVILA signals across all dates")
+    # 3. Load NOVCI (filtered set)
+    novci_signals = load_all_signals("NOVCI_*.tsv", is_NOVCI=True)
+    print(f"  Loaded {len(novci_signals)} NOVCI signals across all dates")
 
     # ── Separate pre-match vs LIVE signals ──
     prematch_final = []
@@ -221,20 +221,20 @@ def run_analysis():
         else:
             prematch_final.append(s)
 
-    prematch_zlatna = []
-    live_zlatna = []
-    for s in zlatna_signals:
+    prematch_novci = []
+    live_novci = []
+    for s in novci_signals:
         ko = s.get('kick_off', '').strip()
         mtk = s.get('min_to_ko', '').strip()
         if mtk == 'LIVE' or 'LIVE' in ko:
-            live_zlatna.append(s)
+            live_novci.append(s)
         else:
-            prematch_zlatna.append(s)
+            prematch_novci.append(s)
 
     print(f"\n  Pre-match FINAL_BETS: {len(prematch_final)}")
     print(f"  Live FINAL_BETS: {len(live_final)}")
-    print(f"  Pre-match ZLATNA: {len(prematch_zlatna)}")
-    print(f"  Live ZLATNA (LIVE_VALUE): {len(live_zlatna)}")
+    print(f"  Pre-match NOVCI: {len(prematch_novci)}")
+    print(f"  Live NOVCI (LIVE_VALUE): {len(live_novci)}")
 
     # ── Match signals to results ──
     def resolve_signals(signals_list, label):
@@ -326,8 +326,8 @@ def run_analysis():
         return resolved
 
     resolved_final = resolve_signals(prematch_final, "FINAL_BETS (pre-match)")
-    resolved_zlatna = resolve_signals(prematch_zlatna, "ZLATNA_PRAVILA (pre-match)")
-    resolved_live = resolve_signals(live_zlatna, "ZLATNA/LIVE_VALUE")
+    resolved_novci = resolve_signals(prematch_novci, "NOVCI (pre-match)")
+    resolved_live = resolve_signals(live_novci, "NOVCI/LIVE_VALUE")
 
     # ================================================================
     # ANALYSIS FUNCTIONS
@@ -453,23 +453,23 @@ def run_analysis():
     analyze_dimension(resolved_final, lambda b: b['date'], "A.8: BY DATE")
 
     # ═══════════════════════════════════════════════════════════════
-    # B. ZLATNA PRAVILA FILTERED — HOW DID THE GOLDEN RULES PERFORM?
+    # B. NOVCI FILTERED — HOW DID THE GOLDEN RULES PERFORM?
     # ═══════════════════════════════════════════════════════════════
     print("\n\n" + "#" * 100)
-    print("  SECTION B: ZLATNA PRAVILA (filtered golden rules — pre-match only)")
+    print("  SECTION B: NOVCI (filtered golden rules — pre-match only)")
     print("#" * 100)
     
-    # Only pre-match STEAM/LATE_SHARP from ZLATNA
-    zlatna_prematch_quality = [b for b in resolved_zlatna if b['type'] in ('STEAM', 'LATE_SHARP')]
-    all_zlatna_stats = calc_stats(zlatna_prematch_quality)
-    print_stats("ZLATNA PRE-MATCH (STEAM+LATE_SHARP)", all_zlatna_stats)
+    # Only pre-match STEAM/LATE_SHARP from NOVCI
+    NOVCI_prematch_quality = [b for b in resolved_novci if b['type'] in ('STEAM', 'LATE_SHARP')]
+    all_NOVCI_stats = calc_stats(NOVCI_prematch_quality)
+    print_stats("NOVCI PRE-MATCH (STEAM+LATE_SHARP)", all_NOVCI_stats)
 
-    analyze_dimension(zlatna_prematch_quality, lambda b: b['type'], "B.1: ZLATNA BY SIGNAL TYPE")
-    analyze_dimension(zlatna_prematch_quality, lambda b: b['consensus'], "B.2: ZLATNA BY MARKET CONSENSUS")
-    analyze_dimension(zlatna_prematch_quality, odds_bucket, "B.3: ZLATNA BY ODDS RANGE")
-    analyze_dimension(zlatna_prematch_quality, drop_bucket, "B.4: ZLATNA BY DROP %")
-    analyze_dimension(zlatna_prematch_quality, conf_bucket, "B.5: ZLATNA BY CONFIDENCE")
-    analyze_dimension(zlatna_prematch_quality, lambda b: b['bet'], "B.6: ZLATNA BY BET TYPE (1/X/2)")
+    analyze_dimension(NOVCI_prematch_quality, lambda b: b['type'], "B.1: NOVCI BY SIGNAL TYPE")
+    analyze_dimension(NOVCI_prematch_quality, lambda b: b['consensus'], "B.2: NOVCI BY MARKET CONSENSUS")
+    analyze_dimension(NOVCI_prematch_quality, odds_bucket, "B.3: NOVCI BY ODDS RANGE")
+    analyze_dimension(NOVCI_prematch_quality, drop_bucket, "B.4: NOVCI BY DROP %")
+    analyze_dimension(NOVCI_prematch_quality, conf_bucket, "B.5: NOVCI BY CONFIDENCE")
+    analyze_dimension(NOVCI_prematch_quality, lambda b: b['bet'], "B.6: NOVCI BY BET TYPE (1/X/2)")
 
     # ── B.7 By score threshold ──
     def score_bucket(b):
@@ -479,7 +479,7 @@ def run_analysis():
         elif s >= 65: return '65-74 score'
         elif s >= 55: return '55-64 score'
         else: return '<55 score'
-    analyze_dimension(zlatna_prematch_quality, score_bucket, "B.7: ZLATNA BY SCORE THRESHOLD")
+    analyze_dimension(NOVCI_prematch_quality, score_bucket, "B.7: NOVCI BY SCORE THRESHOLD")
 
     # ═══════════════════════════════════════════════════════════════
     # C. COMBINED FILTER OPTIMIZATION
@@ -512,11 +512,11 @@ def run_analysis():
         tag = " ← CURRENT" if min_drop == 8 else ""
         print_stats(f"Drop ≥ {min_drop}%{tag}", stats)
 
-    # Test snapshot thresholds (using ZLATNA data which has snapshots)
+    # Test snapshot thresholds (using NOVCI data which has snapshots)
     print(f"\n  {'─' * 80}")
-    print(f"  C.3: Snapshot threshold tests (using ZLATNA data):")
+    print(f"  C.3: Snapshot threshold tests (using NOVCI data):")
     for min_snaps in [20, 30, 40, 50, 60, 80, 100]:
-        filtered = [b for b in zlatna_prematch_quality if b['snapshots'] >= min_snaps]
+        filtered = [b for b in NOVCI_prematch_quality if b['snapshots'] >= min_snaps]
         stats = calc_stats(filtered)
         tag = " ← CURRENT" if min_snaps == 30 else ""
         print_stats(f"Snaps ≥ {min_snaps}{tag}", stats)
@@ -565,18 +565,18 @@ def run_analysis():
     for label, stats in best_combos[-5:]:
         print_stats(label, stats)
     
-    # C.5b: Combined filters on ZLATNA data (has snapshots + score)
+    # C.5b: Combined filters on NOVCI data (has snapshots + score)
     print(f"\n  {'─' * 80}")
-    print(f"  C.5b: Combined filter optimization (ZLATNA data — has snapshots & score):")
+    print(f"  C.5b: Combined filter optimization (NOVCI data — has snapshots & score):")
     
-    zlatna_combos = []
+    NOVCI_combos = []
     for min_conf in [0.80, 0.90, 0.95]:
         for min_drop in [8, 10, 12, 15]:
             for min_snaps in [30, 40, 50, 60, 80]:
                 for require_consensus in [True, False]:
                     for exclude_draws in [True, False]:
                         for min_score in [0, 65, 75]:
-                            filtered = [b for b in zlatna_prematch_quality
+                            filtered = [b for b in NOVCI_prematch_quality
                                         if b['confidence'] >= min_conf
                                         and abs(b['drop_pct']) >= min_drop
                                         and b['snapshots'] >= min_snaps
@@ -589,11 +589,11 @@ def run_analysis():
                                                f"Cons={'DA' if require_consensus else 'ALL'} "
                                                f"Draws={'NO' if exclude_draws else 'YES'} "
                                                f"Score≥{min_score}")
-                                zlatna_combos.append((combo_label, stats))
+                                NOVCI_combos.append((combo_label, stats))
 
-    zlatna_combos.sort(key=lambda x: x[1]['roi'], reverse=True)
-    print(f"\n  Top 20 ZLATNA combos by ROI (min 3 bets):")
-    for label, stats in zlatna_combos[:20]:
+    NOVCI_combos.sort(key=lambda x: x[1]['roi'], reverse=True)
+    print(f"\n  Top 20 NOVCI combos by ROI (min 3 bets):")
+    for label, stats in NOVCI_combos[:20]:
         print_stats(label, stats)
 
     # ── C.6: Odds range filtering ──
@@ -626,7 +626,7 @@ def run_analysis():
         print_stats(f"Exclude draws > {max_draw_odds:.1f}{tag}", stats)
 
     # ═══════════════════════════════════════════════════════════════
-    # D. LIVE_VALUE SIGNAL ANALYSIS (from ZLATNA_PRAVILA)
+    # D. LIVE_VALUE SIGNAL ANALYSIS (from NOVCI)
     # ═══════════════════════════════════════════════════════════════
     print("\n\n" + "#" * 100)
     print("  SECTION D: LIVE_VALUE SIGNALS (in-play)")
@@ -650,13 +650,13 @@ def run_analysis():
         print("  No LIVE_VALUE signals with resolved scores.")
 
     # ═══════════════════════════════════════════════════════════════
-    # E. INDIVIDUAL MATCH RESULTS (ZLATNA pre-match)
+    # E. INDIVIDUAL MATCH RESULTS (NOVCI pre-match)
     # ═══════════════════════════════════════════════════════════════
     print("\n\n" + "#" * 100)
-    print("  SECTION E: INDIVIDUAL MATCH RESULTS — ZLATNA PRE-MATCH (STEAM+LATE_SHARP)")
+    print("  SECTION E: INDIVIDUAL MATCH RESULTS — NOVCI PRE-MATCH (STEAM+LATE_SHARP)")
     print("#" * 100)
     
-    for b in sorted(zlatna_prematch_quality, key=lambda x: (x['date'], x['kick_off'])):
+    for b in sorted(NOVCI_prematch_quality, key=lambda x: (x['date'], x['kick_off'])):
         emoji = "✅" if b['result'] == 'WON' else "❌"
         print(f"  {emoji} [{b['type']:<11}] {b['date']} {b['kick_off']:>5} | "
               f"{b['match'][:40]:<40} | {b['bet_label'][:20]:<20} "
@@ -667,10 +667,10 @@ def run_analysis():
     # F. MOVEMENT TRAJECTORY ANALYSIS (odds path from first→last snapshot)
     # ═══════════════════════════════════════════════════════════════
     print("\n\n" + "#" * 100)
-    print("  SECTION F: ZLATNA MATCH ODDS TRAJECTORY (first vs last snapshot in movement_log)")
+    print("  SECTION F: NOVCI MATCH ODDS TRAJECTORY (first vs last snapshot in movement_log)")
     print("#" * 100)
     
-    # For each ZLATNA pre-match bet, find the full odds history from movement_log
+    # For each NOVCI pre-match bet, find the full odds history from movement_log
     print("\n  Checking if STEAM moves continued or reversed before kick-off...")
     
     # Build a richer lookup from movement_log: (home_norm, away_norm) -> list of (scraped_at, odds_1, odds_x, odds_2)
@@ -698,7 +698,7 @@ def run_analysis():
     continued_count = 0
     total_trajectory = 0
     
-    for b in zlatna_prematch_quality:
+    for b in NOVCI_prematch_quality:
         match_str = b['match']
         if ' vs ' not in match_str:
             continue
@@ -757,20 +757,20 @@ def run_analysis():
     print("  SECTION G: SUMMARY & PARAMETER TWEAK RECOMMENDATIONS")
     print("#" * 100)
 
-    # Current ZLATNA rules assessment
-    print(f"\n  CURRENT ZLATNA PRAVILA PARAMETERS:")
-    print(f"    ZLATNA_MIN_CONFIDENCE = 0.80")
-    print(f"    ZLATNA_MIN_DROP_PCT   = 0.08  (8%)")
-    print(f"    ZLATNA_MIN_SNAPSHOTS  = 30")
-    print(f"    ZLATNA_ALLOWED_TYPES  = STEAM, LATE_SHARP")
-    print(f"    ZLATNA_MAX_DRAW_ODDS  = 5.0")
+    # Current NOVCI rules assessment
+    print(f"\n  CURRENT NOVCI PARAMETERS:")
+    print(f"    NOVCI_MIN_CONFIDENCE = 0.80")
+    print(f"    NOVCI_MIN_DROP_PCT   = 0.08  (8%)")
+    print(f"    NOVCI_MIN_SNAPSHOTS  = 30")
+    print(f"    NOVCI_ALLOWED_TYPES  = STEAM, LATE_SHARP")
+    print(f"    NOVCI_MAX_DRAW_ODDS  = 5.0")
     
-    # Calculate current filter performance from ZLATNA data
-    current_filter = zlatna_prematch_quality  # This IS the current filter output
+    # Calculate current filter performance from NOVCI data
+    current_filter = NOVCI_prematch_quality  # This IS the current filter output
     current_stats = calc_stats(current_filter)
     
-    print(f"\n  Current filter performance (from ZLATNA_PRAVILA files):")
-    print_stats("CURRENT ZLATNA (all)", current_stats)
+    print(f"\n  Current filter performance (from NOVCI files):")
+    print_stats("CURRENT NOVCI (all)", current_stats)
     
     # Sub-breakdowns
     current_da = calc_stats([b for b in current_filter if b['consensus'] == 'DA'])
@@ -817,19 +817,19 @@ def run_analysis():
     print_stats("Opt9: Conf≥90% Drop≥8% NoDraw+Odds≤3", opt9)
     print_stats("Opt10: Conf≥90% Drop≥15% NoDraw", opt10)
     
-    # From ZLATNA data (has snapshots)
-    print(f"\n  Using ZLATNA data (has snapshots, {len(zlatna_prematch_quality)} bets):")
+    # From NOVCI data (has snapshots)
+    print(f"\n  Using NOVCI data (has snapshots, {len(NOVCI_prematch_quality)} bets):")
     
-    z1 = calc_stats([b for b in zlatna_prematch_quality if b['confidence'] >= 0.90])
-    z2 = calc_stats([b for b in zlatna_prematch_quality if b['confidence'] >= 0.90 and b['consensus'] == 'DA'])
-    z3 = calc_stats([b for b in zlatna_prematch_quality if b['confidence'] >= 0.90 and b['bet'] != 'X'])
-    z4 = calc_stats([b for b in zlatna_prematch_quality if b['confidence'] >= 0.90 and b['consensus'] == 'DA' and b['bet'] != 'X'])
-    z5 = calc_stats([b for b in zlatna_prematch_quality if b['confidence'] >= 0.90 and b['snapshots'] >= 50])
-    z6 = calc_stats([b for b in zlatna_prematch_quality if b['confidence'] >= 0.90 and b['snapshots'] >= 50 and b['consensus'] == 'DA'])
-    z7 = calc_stats([b for b in zlatna_prematch_quality if b['confidence'] >= 0.90 and b['score_val'] >= 75])
-    z8 = calc_stats([b for b in zlatna_prematch_quality if b['confidence'] >= 0.90 and b['score_val'] >= 75 and b['consensus'] == 'DA'])
-    z9 = calc_stats([b for b in zlatna_prematch_quality if b['consensus'] == 'DA' and b['bet'] != 'X' and b['odds'] <= 3.0])
-    z10 = calc_stats([b for b in zlatna_prematch_quality if b['confidence'] >= 0.90 and b['consensus'] == 'DA' and b['bet'] != 'X' and b['odds'] <= 3.0])
+    z1 = calc_stats([b for b in NOVCI_prematch_quality if b['confidence'] >= 0.90])
+    z2 = calc_stats([b for b in NOVCI_prematch_quality if b['confidence'] >= 0.90 and b['consensus'] == 'DA'])
+    z3 = calc_stats([b for b in NOVCI_prematch_quality if b['confidence'] >= 0.90 and b['bet'] != 'X'])
+    z4 = calc_stats([b for b in NOVCI_prematch_quality if b['confidence'] >= 0.90 and b['consensus'] == 'DA' and b['bet'] != 'X'])
+    z5 = calc_stats([b for b in NOVCI_prematch_quality if b['confidence'] >= 0.90 and b['snapshots'] >= 50])
+    z6 = calc_stats([b for b in NOVCI_prematch_quality if b['confidence'] >= 0.90 and b['snapshots'] >= 50 and b['consensus'] == 'DA'])
+    z7 = calc_stats([b for b in NOVCI_prematch_quality if b['confidence'] >= 0.90 and b['score_val'] >= 75])
+    z8 = calc_stats([b for b in NOVCI_prematch_quality if b['confidence'] >= 0.90 and b['score_val'] >= 75 and b['consensus'] == 'DA'])
+    z9 = calc_stats([b for b in NOVCI_prematch_quality if b['consensus'] == 'DA' and b['bet'] != 'X' and b['odds'] <= 3.0])
+    z10 = calc_stats([b for b in NOVCI_prematch_quality if b['confidence'] >= 0.90 and b['consensus'] == 'DA' and b['bet'] != 'X' and b['odds'] <= 3.0])
     
     print_stats("Z1: Conf≥90%", z1)
     print_stats("Z2: Conf≥90% DA", z2)

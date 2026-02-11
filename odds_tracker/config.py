@@ -72,11 +72,21 @@ PAGE_TIMEOUT_MS = 60000
 # Analysis intervals (minutes before kick-off)
 KEY_INTERVALS = [120, 60, 45, 30, 10, 5]
 
-# Signal thresholds
+# Signal thresholds (aligned with tier-based system from signal_config.py)
 STEAM_MOVE_THRESHOLD = 0.05       # 5% odds drop = steam move
-STRONG_SIGNAL_THRESHOLD = 0.08    # 8% = strong signal
+STRONG_SIGNAL_THRESHOLD = 0.08    # 8% = strong signal (for legacy detection)
 REVERSE_MOVE_THRESHOLD = 0.03     # 3% move against trend
 MIN_SNAPSHOTS_FOR_SIGNAL = 3      # need at least 3 data points
+
+# Tier system thresholds (primary classifier — see signal_config.py)
+TIER1_MIN_DROP_PCT = 10.0         # ≥10% drop → TIER 1 (Home)
+TIER2_MIN_DROP_PCT = 5.0          # ≥5% drop → TIER 2 (Home)
+TIER3_MIN_DROP_PCT = 10.0         # ≥10% drop → TIER 3 (Away favorite)
+DRAW_MIN_DROP_PCT = 10.0          # ≥10% drop behind remi filtering
+ACTIONABLE_WINDOW_MINUTES = 30    # Only 0-30 min window has + ROI
+MAX_ODDS_HOME = 3.00              # Home autsajderi → ROI = -35.3%
+MAX_ODDS_DRAW = 3.50              # Draw autsajderi → ROI = -31.6%
+MAX_ODDS_AWAY = 1.60              # Only jaki favoriti profitable for away
 
 # Display
 TIMEZONE = "Europe/Zagreb"  # CET
