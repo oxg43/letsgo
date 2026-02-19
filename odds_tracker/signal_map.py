@@ -9,18 +9,18 @@ Four files are maintained:
 2. FINAL_BETS_<date>.tsv    — Append-only. Signals captured 5-9 min before KO.
    This is the "golden window" file for actual betting decisions.
 
-3. NOVCI_<date>.tsv — Append-only. BEST signals only (9-5 min before KO).
-   Filtered by tier system (optimised from 1,750-match deep analysis):
-   - TIER 1-3 qualified signals only
-   - All tier-valid types (STEAM, LATE_SHARP, SUSTAINED_DROP, DROP_SIGNAL)
-   - Confidence >= 75% (tiers encode quality)
-   - Drop >= 5% (tier rules enforce proper thresholds)
-   - Draws ALLOWED if tier-qualified (T2_DRAW rules)
-   - Max odds 3.50
-   - Score-ranked by strength + tier bonus
+3. ZLATNA_PRAVILA_<date>.tsv — Append-only. BEST signals only (9-5 min before KO).
+   Filtered by golden rules (optimised from 3-day, 235-bet backtest):
+   - Only STEAM or LATE_SHARP (no MIXED/SUSTAINED_DROP)
+   - Confidence >= 90%  (90%+ = 57% hit / +20% ROI vs 80-89% = 20% hit / -37% ROI)
+   - Odds drop >= 8%
+   - No draws (X bets) — 18% hit, -48% ROI
+   - Max odds 3.50     — above 3.50 = sub-18% hit
+   - 30+ snapshots for robust data
+   - Score-ranked by strength
 
 4. WEEKLY_SIGNALS_<date>.tsv — Append-only. Early-detection signals for future
-   matches (tomorrow + 2-7 days ahead). Same NOVCI filters applied but
+   matches (tomorrow + 2-7 days ahead). Same ZLATNA filters applied but
    without golden-window (5-9 min) restriction = catches early market moves.
 """
 import csv
@@ -32,9 +32,9 @@ from odds_tracker.config import DATA_DIR
 SIGNAL_MAP_DIR = DATA_DIR / "signal_map"
 SIGNAL_MAP_DIR.mkdir(exist_ok=True)
 
-# NOVCI window: 0-29 minutes before kick-off
-GOLDEN_MIN = 0
-GOLDEN_MAX = 29
+# Golden window: 5-9 minutes before kick-off (user requirement)
+GOLDEN_MIN = 5
+GOLDEN_MAX = 9
 
 TSV_COLUMNS = [
     'kick_off',
@@ -52,83 +52,49 @@ TSV_COLUMNS = [
     'reason',
 ]
 
-FINAL_COLUMNS = [
-    'captured_at',
-    'match_id',
-    'kick_off',
-    'kickoff_utc',
-    'min_to_ko',
-    'type',
-    'match',
-    'bet',
-    'odds',
-    'confidence',
-    'change',
-    'opening',
-    'drop_from_open',
-    'drop_last_60',
-    'retrace_last_30',
-    'snapshots',
-    'snapshots_last_60',
-    'consensus_flag',
-    'steam_flag',
-    'market_margin',
-    'edge',
-    'fair_odds',
-    'kelly',
-    'reason',
-]
+FINAL_COLUMNS = ['captured_at'] + TSV_COLUMNS
 
-# ─── NOVCI columns ─────────────────────────────────────────────
-NOVCI_COLUMNS = [
+# ─── ZLATNA PRAVILA columns ────────────────────────────────────
+ZLATNA_COLUMNS = [
     'captured_at',
-    'match_id',
     'kick_off',
-    'kickoff_utc',
     'min_to_ko',
     'match',
     'bet',
     'odds',
     'opening',
     'drop_pct',
-    'drop_from_open',
-    'drop_last_60',
-    'retrace_last_30',
     'snapshots',
-    'snapshots_last_60',
     'confidence',
-    'consensus_flag',
-    'steam_flag',
-    'market_margin',
     'score',
+    'market_consensus',
     'type',
     'reason',
 ]
 
-# ─── NOVCI RULES ───────────────────────────────────────────────────
+# ─── ZLATNA PRAVILA RULES (optimised from 3-day backtest, 235 bets) ──
 #
-# Updated 2026-02-10 after deep analysis of 1,750 matches.
+# Backtest (2026-02-07 to 2026-02-09):
+#   Data: 454K movement rows, 601 FINAL_BETS, 235 ZLATNA bets
 #
-# Deep analysis (943,637 rows, 1,750 matches):
-#   TIER 1: Home ≥10% drop → 44.4% hit, +76.8% ROI (N=108)
-#   TIER 2: Home ≥5% drop → 46.1% hit, +52.1% ROI (N=245)
-#   TIER 2: Draw ≥10% (2.20-3.00) → 27.1% hit, +41.8% ROI (N=48)
-#   TIER 3: Away favorite ≥10% → jaki favoriti only
-#   Time window: ONLY 0-30 min has positive ROI (+3.7%)
+# KEY FINDINGS:
+#   Conf 90-95%:  57.4% hit, +19.8% ROI (+20u) — PROFIT
+#   Conf 80-89%:  20.1% hit, -36.7% ROI (-49u) — DISASTER
+#   Draws (X):    18.4% hit, -47.9% ROI (-18u) — TOXIC
+#   Odds ≤ 2.00:  69.0% hit, +7.9% ROI         — SWEET SPOT
+#   Odds 3.50+:   17.6% hit, -28.4% ROI        — LOSS ZONE
+#   DA consensus: 58.4% hit, +8.6% ROI         — EDGE
+#   NE consensus: 22.6% hit, -25.3% ROI
+#   LATE_SHARP:   47.4% hit, +68.8% ROI (small sample)
 #
-# NOVCI uses TIER SYSTEM as primary filter:
-#   - TIER 1 or TIER 2 signals pass automatically if in golden window
-#   - TIER 3 requires additional validation
-#   - Confidence ≥ 75% (tiers encode signal quality)
-#   - Drop ≥ 5% (tier rules enforce proper thresholds)
-#   - Draws ALLOWED if tier-qualified (T2_DRAW rules have odds filters)
+# Best combo (93 bets): Conf>=90% + NoDraw → 59.1% hit, +21.7% ROI
 #
-NOVCI_MIN_CONFIDENCE = 0.75      # Tiers encode signal quality
-NOVCI_MIN_DROP_PCT = 0.05        # 5% min - tier rules enforce proper thresholds
-NOVCI_MIN_SNAPSHOTS = 3          # Match tier min_snapshots
-NOVCI_ALLOWED_TYPES = {'STEAM', 'LATE_SHARP', 'SUSTAINED_DROP', 'DROP_SIGNAL'}  # All tier-qualified types
-NOVCI_MAX_ODDS = 3.50            # Above 3.50 is still bad
-NOVCI_EXCLUDE_DRAWS = False      # Draws ALLOWED if tier-qualified (T2_DRAW rules filter properly)
+ZLATNA_MIN_CONFIDENCE = 0.90     # was 0.80 — raised, 80-89% is -37% ROI
+ZLATNA_MIN_DROP_PCT = 0.08       # 8% — confirmed sweet spot
+ZLATNA_MIN_SNAPSHOTS = 30        # need robust data
+ZLATNA_ALLOWED_TYPES = {'STEAM', 'LATE_SHARP'}  # only proven types
+ZLATNA_MAX_ODDS = 3.50           # was unlimited — above 3.50 = sub-18% hit
+ZLATNA_EXCLUDE_DRAWS = True      # NEW — draws = 18% hit, -48% ROI
 
 
 def _live_file() -> Path:
@@ -141,9 +107,9 @@ def _final_file() -> Path:
     return SIGNAL_MAP_DIR / f"FINAL_BETS_{datetime.now().strftime('%Y-%m-%d')}.tsv"
 
 
-def _novci_file() -> Path:
-    """NOVCI file — best tier-qualified bets (append-only)."""
-    return SIGNAL_MAP_DIR / f"NOVCI_{datetime.now().strftime('%Y-%m-%d')}.tsv"
+def _zlatna_file() -> Path:
+    """Zlatna Pravila file — best golden-rule bets (append-only)."""
+    return SIGNAL_MAP_DIR / f"ZLATNA_PRAVILA_{datetime.now().strftime('%Y-%m-%d')}.tsv"
 
 
 def _weekly_file() -> Path:
@@ -155,27 +121,21 @@ def _weekly_file() -> Path:
 WEEKLY_EARLY_MIN_SNAPSHOTS = 5      # 5 snaps minimum for early tier
 WEEKLY_EARLY_MIN_CONFIDENCE = 0.65   # 65%+ for early tier (vs 90% for confirmed)
 
-# Weekly signal columns (same as NOVCI + match_date + days_until + stage)
+# Weekly signal columns (same as ZLATNA + match_date + days_until + stage)
 WEEKLY_COLUMNS = [
     'captured_at',
-    'match_id',
     'match_date',
     'days_until',
     'kick_off',
-    'kickoff_utc',
     'match',
     'bet',
     'odds',
     'opening',
     'drop_pct',
-    'drop_from_open',
     'snapshots',
-    'snapshots_last_60',
     'confidence',
-    'consensus_flag',
-    'steam_flag',
-    'market_margin',
     'score',
+    'market_consensus',
     'type',
     'stage',
     'reason',
@@ -198,13 +158,13 @@ def _bet_label(signal: dict) -> str:
 
 def _signal_to_row(s: dict, now: datetime) -> dict | None:
     """Convert a signal dict to a TSV row. Returns None if kick_off is invalid."""
-    match_date = s.get('_match_date', '') or now.strftime('%Y-%m-%d')
+    today_str = now.strftime('%Y-%m-%d')
     ko_str = s.get('kick_off', '')
     if not ko_str:
         return None
 
     try:
-        ko_dt = datetime.strptime(f"{match_date} {ko_str}", '%Y-%m-%d %H:%M')
+        ko_dt = datetime.strptime(f"{today_str} {ko_str}", '%Y-%m-%d %H:%M')
         minutes_to_ko = (ko_dt - now).total_seconds() / 60
     except ValueError:
         return None
@@ -213,36 +173,19 @@ def _signal_to_row(s: dict, now: datetime) -> dict | None:
     if minutes_to_ko < -5:
         return None
 
-    # Build tier tag if available
-    tier = s.get('tier', '')
-    tier_rule = s.get('tier_rule', '')
-    sig_type = s.get('signal_type', 'SIGNAL')
-    if tier and tier > 0:
-        sig_type = f'T{tier}:{sig_type}'
-
     return {
         'kick_off': ko_str,
-        'match_id': s.get('match_id', ''),
-        'kickoff_utc': s.get('kickoff_utc', ''),
-        'min_to_ko': int(max(0, minutes_to_ko)),
-        'type': sig_type,
+        'min_to_ko': f"{max(0, minutes_to_ko):.0f}",
+        'type': s.get('signal_type', 'SIGNAL'),
         'match': f"{s.get('home', '?')} vs {s.get('away', '?')}",
         'bet': _bet_label(s),
-        'odds': round(s.get('latest_odds', 0), 3),
-        'confidence': round(s.get('confidence', 0), 3),
-        'change': round(s.get('pct_change', 0), 4),
-        'opening': round(s.get('opening_odds', 0), 3),
-        'drop_from_open': round(s.get('drop_from_open', 0), 4),
-        'drop_last_60': round(s.get('drop_last_60', 0), 4),
-        'retrace_last_30': round(s.get('retrace_last_30', 0), 4),
-        'snapshots': s.get('snapshots', 0),
-        'snapshots_last_60': s.get('snapshots_last_60', 0),
-        'consensus_flag': s.get('consensus_flag', 0),
-        'steam_flag': s.get('steam_flag', 0),
-        'market_margin': round(s.get('market_margin', 0), 4),
+        'odds': f"{s.get('latest_odds', 0):.2f}",
+        'confidence': f"{s.get('confidence', 0):.0%}",
+        'change': f"{s.get('pct_change', 0):+.1%}",
+        'opening': f"{s.get('opening_odds', 0):.2f}",
         'edge': '',
         'fair_odds': '',
-        'kelly': round(s.get('kelly_full_pct', 0), 2) if s.get('kelly_full_pct') else '',
+        'kelly': '',
         'reason': s.get('reason', ''),
     }
 
@@ -280,12 +223,11 @@ def write_live_signals(signals: list[dict], value_bets: list[dict] = None) -> in
             rows.append(row)
 
     # Sort by kick_off time, then by confidence descending
-    rows.sort(key=lambda r: (r['kick_off'], -float(r['confidence'])))
+    rows.sort(key=lambda r: (r['kick_off'], -float(r['confidence'].rstrip('%')) / 100))
 
     # Overwrite the file completely
     with open(tsv_path, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=TSV_COLUMNS, delimiter='\t',
-                                extrasaction='ignore')
+        writer = csv.DictWriter(f, fieldnames=TSV_COLUMNS, delimiter='\t')
         writer.writeheader()
         for row in rows:
             writer.writerow(row)
@@ -332,9 +274,8 @@ def capture_final_bets(signals: list[dict], value_bets: list[dict] = None) -> li
         ko_str = s.get('kick_off', '')
         if not ko_str:
             continue
-        match_date = s.get('_match_date', '') or today_str
         try:
-            ko_dt = datetime.strptime(f"{match_date} {ko_str}", '%Y-%m-%d %H:%M')
+            ko_dt = datetime.strptime(f"{today_str} {ko_str}", '%Y-%m-%d %H:%M')
             minutes_to_ko = (ko_dt - now).total_seconds() / 60
         except ValueError:
             continue
@@ -363,8 +304,7 @@ def capture_final_bets(signals: list[dict], value_bets: list[dict] = None) -> li
     new_rows = []
 
     with open(tsv_path, 'a', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=FINAL_COLUMNS, delimiter='\t',
-                                extrasaction='ignore')
+        writer = csv.DictWriter(f, fieldnames=FINAL_COLUMNS, delimiter='\t')
         if not file_exists:
             writer.writeheader()
 
@@ -378,12 +318,12 @@ def capture_final_bets(signals: list[dict], value_bets: list[dict] = None) -> li
     return new_rows
 
 
-# ─── NOVCI (append-only, tier-qualified bets 9-5 min) ──────────
+# ─── ZLATNA PRAVILA (append-only, golden rules 9-5 min) ────────
 
-def _calculate_novci_score(pct_drop: float, confidence: float, snapshots: int,
-                           has_consensus: bool) -> float:
+def _calculate_zlatna_score(pct_drop: float, confidence: float, snapshots: int,
+                            has_consensus: bool) -> float:
     """
-    Calculate quality score for a NOVCI signal.
+    Calculate quality score for a golden-rule signal.
     Formula derived from today's analysis of 74,500+ snapshots.
 
     Score components:
@@ -403,23 +343,21 @@ def _calculate_novci_score(pct_drop: float, confidence: float, snapshots: int,
     return round(drop_score + conf_score + data_score + cons_score, 1)
 
 
-def capture_novci(signals: list[dict], value_bets: list[dict] = None) -> list[dict]:
+def capture_zlatna_pravila(signals: list[dict], value_bets: list[dict] = None) -> list[dict]:
     """
     Capture ONLY the highest-quality signals in the golden window (9-5 min
-    before kick-off) using tier-based filtering.
+    before kick-off) using strict golden rules learned from today's data.
 
     Rules:
-    1. Tier 1-3 qualified (WATCH/tier 0 excluded)
-    2. STEAM, LATE_SHARP, SUSTAINED_DROP, or DROP_SIGNAL type
-    3. Confidence >= 75%
-    4. Drop >= 5%
-    5. Min 3 snapshots
-    6. Draws allowed if tier-qualified
-    7. Max odds 3.50
-    8. T3 requires ≥15% drop
-    9. Score-ranked with tier bonus
+    1. Only STEAM or LATE_SHARP signal types
+    2. Confidence >= 90%
+    3. Odds drop >= 8% (absolute)
+    4. At least 30 snapshots
+    5. No draws (X bets) — 18% hit, -48% ROI in backtest
+    6. Max odds 3.50 — above = sub-18% hit rate
+    7. Score-ranked by composite quality metric
 
-    Returns list of newly captured NOVCI rows.
+    Returns list of newly captured golden-rule rows.
     """
     now = datetime.now()
     today_str = now.strftime('%Y-%m-%d')
@@ -436,9 +374,8 @@ def capture_novci(signals: list[dict], value_bets: list[dict] = None) -> list[di
         ko_str = s.get('kick_off', '')
         if not ko_str:
             continue
-        match_date = s.get('_match_date', '') or today_str
         try:
-            ko_dt = datetime.strptime(f"{match_date} {ko_str}", '%Y-%m-%d %H:%M')
+            ko_dt = datetime.strptime(f"{today_str} {ko_str}", '%Y-%m-%d %H:%M')
             minutes_to_ko = (ko_dt - now).total_seconds() / 60
         except ValueError:
             continue
@@ -447,81 +384,58 @@ def capture_novci(signals: list[dict], value_bets: list[dict] = None) -> list[di
         if not (GOLDEN_MIN <= minutes_to_ko <= GOLDEN_MAX):
             continue
 
-        # ── TIER-BASED NOVCI FILTERS ──
+        # ── ZLATNA PRAVILA FILTERS ──
 
-        tier = s.get('tier', 0)
-        confidence = s.get('confidence', 0)
+        # Rule 1: Only STEAM or LATE_SHARP
         sig_type = s.get('signal_type', '')
+        if sig_type not in ZLATNA_ALLOWED_TYPES:
+            continue
+
+        # Rule 2: Confidence >= 80%
+        confidence = s.get('confidence', 0)
+        if confidence < ZLATNA_MIN_CONFIDENCE:
+            continue
+
+        # Rule 3: Odds drop >= 8%
         pct_change = s.get('pct_change', 0)
+        if abs(pct_change) < ZLATNA_MIN_DROP_PCT:
+            continue
+
+        # Rule 4: At least 30 snapshots
         snapshots = s.get('snapshots', 0)
+        if snapshots < ZLATNA_MIN_SNAPSHOTS:
+            continue
+
+        # Rule 5: No draws — 18% hit, -48% ROI in backtest
         bet = s.get('bet', '')
         latest_odds = s.get('latest_odds', 0)
-        drop_pct = s.get('drop_pct', 0)
-
-        # Rule 1: Must be tier-qualified (TIER 1 or 2 pass easily, T3 needs validation)
-        if tier == 0:
-            continue  # WATCH signals never go to NOVCI
-
-        # Rule 2: Signal type check (now includes all tier-valid types)
-        if sig_type not in NOVCI_ALLOWED_TYPES:
+        if ZLATNA_EXCLUDE_DRAWS and bet == 'X':
             continue
 
-        # Rule 3: Minimum confidence (now lower since tiers encode quality)
-        if confidence < NOVCI_MIN_CONFIDENCE:
+        # Rule 6: Max odds cap — above 3.50 = sub-18% hit rate
+        if latest_odds > ZLATNA_MAX_ODDS:
             continue
-
-        # Rule 4: Minimum drop %
-        if abs(pct_change) < NOVCI_MIN_DROP_PCT and drop_pct < (NOVCI_MIN_DROP_PCT * 100):
-            continue
-
-        # Rule 5: Minimum snapshots
-        if snapshots < NOVCI_MIN_SNAPSHOTS:
-            continue
-
-        # Rule 6: Draw filtering — now allowed if tier-qualified
-        # T2_DRAW rules already filter by odds range, so NOVCI trusts the tier
-        if NOVCI_EXCLUDE_DRAWS and bet == 'X':
-            continue
-
-        # Rule 7: Max odds cap
-        if latest_odds > NOVCI_MAX_ODDS:
-            continue
-
-        # Rule 8: TIER 3 extra validation — require higher drop for NOVCI inclusion
-        if tier == 3 and drop_pct < 15.0:
-            continue  # T3 needs at least 15% drop for NOVCI quality
 
         # ── PASSED ALL FILTERS — calculate score ──
         reason = s.get('reason', '')
-        has_consensus = bool(s.get('consensus_flag', 0)) or s.get('market_consensus', False)
+        has_consensus = 'market consensus' in reason.lower() or 'Other outcomes rising' in reason
 
-        # Tier-boosted score: T1 gets 10pt bonus, T2 gets 5pt, T3 gets 0
-        tier_bonus = {1: 10.0, 2: 5.0, 3: 0.0}.get(tier, 0.0)
-        base_score = _calculate_novci_score(pct_change, confidence, snapshots, has_consensus)
-        score = base_score + tier_bonus
+        score = _calculate_zlatna_score(pct_change, confidence, snapshots, has_consensus)
 
         row = {
             'captured_at': now.strftime('%H:%M:%S'),
-            'match_id': s.get('match_id', ''),
             'kick_off': ko_str,
-            'kickoff_utc': s.get('kickoff_utc', ''),
-            'min_to_ko': int(minutes_to_ko),
+            'min_to_ko': f"{minutes_to_ko:.0f}",
             'match': f"{s.get('home', '?')} vs {s.get('away', '?')}",
             'bet': _bet_label(s),
-            'odds': round(latest_odds, 3),
-            'opening': round(s.get('opening_odds', 0), 3),
-            'drop_pct': round(drop_pct, 2),
-            'drop_from_open': round(s.get('drop_from_open', 0), 4),
-            'drop_last_60': round(s.get('drop_last_60', 0), 4),
-            'retrace_last_30': round(s.get('retrace_last_30', 0), 4),
-            'snapshots': snapshots,
-            'snapshots_last_60': s.get('snapshots_last_60', 0),
-            'confidence': round(confidence, 3),
-            'consensus_flag': s.get('consensus_flag', 1 if has_consensus else 0),
-            'steam_flag': s.get('steam_flag', 0),
-            'market_margin': round(s.get('market_margin', 0), 4),
-            'score': round(score, 1),
-            'type': f"T{tier}:{sig_type}" if tier else sig_type,
+            'odds': f"{latest_odds:.2f}",
+            'opening': f"{s.get('opening_odds', 0):.2f}",
+            'drop_pct': f"{pct_change:+.1%}",
+            'snapshots': str(snapshots),
+            'confidence': f"{confidence:.0%}",
+            'score': f"{score:.1f}",
+            'market_consensus': 'DA' if has_consensus else 'NE',
+            'type': sig_type,
             'reason': reason,
         }
 
@@ -534,7 +448,7 @@ def capture_novci(signals: list[dict], value_bets: list[dict] = None) -> list[di
     candidates.sort(key=lambda r: float(r['score']), reverse=True)
 
     # Write to file (append-only, no duplicates)
-    tsv_path = _novci_file()
+    tsv_path = _zlatna_file()
     existing_keys = set()
     if tsv_path.exists():
         try:
@@ -550,8 +464,7 @@ def capture_novci(signals: list[dict], value_bets: list[dict] = None) -> list[di
     new_rows = []
 
     with open(tsv_path, 'a', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=NOVCI_COLUMNS, delimiter='\t',
-                                extrasaction='ignore')
+        writer = csv.DictWriter(f, fieldnames=ZLATNA_COLUMNS, delimiter='\t')
         if not file_exists:
             writer.writeheader()
 
@@ -565,16 +478,15 @@ def capture_novci(signals: list[dict], value_bets: list[dict] = None) -> list[di
     return new_rows
 
 
-def format_novci_signal(row: dict) -> str:
-    """One-line format for terminal display of a NOVCI signal."""
-    cons = 'DA' if row.get('consensus_flag', 0) else 'NE'
+def format_zlatna_signal(row: dict) -> str:
+    """One-line format for terminal display of a zlatna pravila signal."""
     return (
         f"  ⭐ [{row.get('type', '')}] SCORE:{row.get('score', '?')} | "
         f"{row.get('kick_off', '')} ({row.get('min_to_ko', '?')}min) | "
         f"{row.get('match', '')} | {row.get('bet', '')} "
         f"@ {row.get('odds', '')} (drop {row.get('drop_pct', '')}) | "
         f"{row.get('snapshots', '?')} snaps | "
-        f"consensus: {cons}"
+        f"consensus: {row.get('market_consensus', '?')}"
     )
 
 
@@ -586,7 +498,7 @@ def capture_week_signals(future_matches: list[dict]) -> tuple[list[dict], list[d
     Works DIRECTLY with raw match data — runs its own analysis via analyze_match().
 
     Two tiers:
-      - confirmed: passes ALL NOVCI filters (conf >= 90%, 30+ snaps)
+      - confirmed: passes ALL ZLATNA filters (conf >= 90%, 30+ snaps)
       - early:     relaxed thresholds  (conf >= 65%,  5+ snaps)
 
     DEDUP: one entry per match+bet (not per date!) — keeps the correct
@@ -646,8 +558,7 @@ def capture_week_signals(future_matches: list[dict]) -> tuple[list[dict], list[d
 
         # Check each outcome (1, X, 2)
         for outcome in ['1', 'X', '2']:
-            # Draws only blocked if NOVCI_EXCLUDE_DRAWS is True
-            if NOVCI_EXCLUDE_DRAWS and outcome == 'X':
+            if ZLATNA_EXCLUDE_DRAWS and outcome == 'X':
                 continue
 
             pct_change = analysis.get(f'pct_change_{outcome.lower()}', 0)
@@ -658,11 +569,11 @@ def capture_week_signals(future_matches: list[dict]) -> tuple[list[dict], list[d
                 continue
 
             # Max odds filter (applies to both tiers)
-            if latest_odds > NOVCI_MAX_ODDS:
+            if latest_odds > ZLATNA_MAX_ODDS:
                 continue
 
             # Min drop filter (applies to both tiers)
-            if abs(pct_change) < NOVCI_MIN_DROP_PCT:
+            if abs(pct_change) < ZLATNA_MIN_DROP_PCT:
                 continue
 
             # ── Build confidence score ──
@@ -709,11 +620,11 @@ def capture_week_signals(future_matches: list[dict]) -> tuple[list[dict], list[d
             confidence = min(confidence, 0.95)
 
             # ── Signal type check (must be STEAM or LATE_SHARP) ──
-            if sig_type not in NOVCI_ALLOWED_TYPES:
+            if sig_type not in ZLATNA_ALLOWED_TYPES:
                 continue
 
             # ── Determine tier / stage ──
-            if confidence >= NOVCI_MIN_CONFIDENCE and snapshots >= NOVCI_MIN_SNAPSHOTS:
+            if confidence >= ZLATNA_MIN_CONFIDENCE and snapshots >= ZLATNA_MIN_SNAPSHOTS:
                 stage = 'confirmed'
             elif confidence >= WEEKLY_EARLY_MIN_CONFIDENCE and snapshots >= WEEKLY_EARLY_MIN_SNAPSHOTS:
                 stage = 'early'
@@ -721,58 +632,35 @@ def capture_week_signals(future_matches: list[dict]) -> tuple[list[dict], list[d
             else:
                 continue   # does not meet even relaxed thresholds
 
-            score = _calculate_novci_score(pct_change, confidence, snapshots, has_consensus)
+            score = _calculate_zlatna_score(pct_change, confidence, snapshots, has_consensus)
 
             bet_label = {'1': f'1 ({home})', 'X': 'X (Draw)', '2': f'2 ({away})'}.get(outcome, outcome)
             match_str = f'{home} vs {away}'
-
-            # Compute structured fields
-            import hashlib as _hl
-            _raw = f"{m.get('country', '')}|{m.get('league', '')}|{m_date}|{ko_str}|{home}|{away}"
-            w_match_id = _hl.md5(_raw.encode()).hexdigest()[:12]
-            try:
-                w_kickoff_utc = datetime.strptime(f"{m_date} {ko_str}", '%Y-%m-%d %H:%M').isoformat()
-            except ValueError:
-                w_kickoff_utc = ''
-            w_drop_from_open = ((latest_odds - opening_odds) / opening_odds
-                                if opening_odds > 1.0 else 0.0)
-            w_steam_flag = 1 if analysis.get('steam_move') == outcome else 0
-            # market margin
-            _o1 = analysis['latest_odds'].get('1') or 0
-            _ox = analysis['latest_odds'].get('X') or 0
-            _o2 = analysis['latest_odds'].get('2') or 0
-            w_margin = round((1/_o1 + 1/_ox + 1/_o2) - 1.0, 4) if (_o1 > 1 and _ox > 1 and _o2 > 1) else 0.0
 
             # Dedup key: match + bet only (NOT per date)
             dedup_key = f"{match_str}|{bet_label}"
 
             row = {
                 'captured_at': now.strftime('%H:%M:%S'),
-                'match_id': w_match_id,
                 'match_date': m_date,
-                'days_until': days_until,
+                'days_until': str(days_until),
                 'kick_off': ko_str,
-                'kickoff_utc': w_kickoff_utc,
                 'match': match_str,
                 'bet': bet_label,
-                'odds': round(latest_odds, 3),
-                'opening': round(opening_odds, 3),
-                'drop_pct': round(pct_change, 4),
-                'drop_from_open': round(w_drop_from_open, 4),
-                'snapshots': snapshots,
-                'snapshots_last_60': 0,
-                'confidence': round(confidence, 3),
-                'consensus_flag': 1 if has_consensus else 0,
-                'steam_flag': w_steam_flag,
-                'market_margin': w_margin,
-                'score': round(score, 1),
+                'odds': f'{latest_odds:.2f}',
+                'opening': f'{opening_odds:.2f}',
+                'drop_pct': f'{pct_change:+.1%}',
+                'snapshots': str(snapshots),
+                'confidence': f'{confidence:.0%}',
+                'score': f'{score:.1f}',
+                'market_consensus': 'DA' if has_consensus else 'NE',
                 'type': sig_type,
                 'stage': stage,
                 'reason': ' | '.join(reasons),
             }
 
             # Keep only the entry with the smallest days_until (real match date)
-            if dedup_key not in best or days_until < int(best[dedup_key].get('days_until', 9999)):
+            if dedup_key not in best or days_until < int(best[dedup_key]['days_until']):
                 best[dedup_key] = row
 
     if not best:
@@ -877,10 +765,10 @@ def format_golden_signal(row: dict) -> str:
 
 
 def print_signal_map():
-    """Pretty-print current live signals, final bets, NOVCI, and weekly signals."""
+    """Pretty-print current live signals, final bets, zlatna pravila, and weekly signals."""
     live_path = _live_file()
     final_path = _final_file()
-    novci_path = _novci_file()
+    zlatna_path = _zlatna_file()
     weekly_path = _weekly_file()
 
     # Read live signals
@@ -897,12 +785,12 @@ def print_signal_map():
             reader = csv.DictReader(f, delimiter='\t')
             final_rows = list(reader)
 
-    # Read NOVCI
-    novci_rows = []
-    if novci_path.exists():
-        with open(novci_path, 'r', encoding='utf-8') as f:
+    # Read zlatna pravila
+    zlatna_rows = []
+    if zlatna_path.exists():
+        with open(zlatna_path, 'r', encoding='utf-8') as f:
             reader = csv.DictReader(f, delimiter='\t')
-            novci_rows = list(reader)
+            zlatna_rows = list(reader)
 
     print(f"\n  {'='*95}")
     print(f"   LIVE SIGNALS — {datetime.now().strftime('%Y-%m-%d %H:%M')}")
@@ -930,16 +818,16 @@ def print_signal_map():
     else:
         print("  No live signals yet.")
 
-    # ── NOVCI ──
+    # ── ZLATNA PRAVILA ──
     print(f"\n  {'='*95}")
-    print(f"   NOVCI — Best Bets (golden rules)")
-    print(f"   File: {novci_path.name}")
+    print(f"   ZLATNA PRAVILA — Best Bets (golden rules)")
+    print(f"   File: {zlatna_path.name}")
     print(f"  {'='*95}")
 
-    if novci_rows:
+    if zlatna_rows:
         print(f"  {'Uhvacen':>8}  {'KO':>5}  {'Score':>5}  {'Match':<35}  {'Bet':<20}  {'Odds':>5}  {'Drop':>7}  {'Snaps':>5}  {'Cons':>3}")
         print(f"  {'-'*95}")
-        for r in novci_rows[-20:]:
+        for r in zlatna_rows[-20:]:
             print(
                 f"  {r.get('captured_at', ''):>8}  "
                 f"{r.get('kick_off', ''):>5}  "
@@ -949,12 +837,12 @@ def print_signal_map():
                 f"{r.get('odds', ''):>5}  "
                 f"{r.get('drop_pct', ''):>7}  "
                 f"{r.get('snapshots', ''):>5}  "
-                f"{r.get('consensus_flag', ''):>3}"
+                f"{r.get('market_consensus', ''):>3}"
             )
         print(f"  {'-'*95}")
-        print(f"  Total: {len(novci_rows)} NOVCI bets")
+        print(f"  Total: {len(zlatna_rows)} zlatna pravila bets")
     else:
-        print("  No NOVCI bets yet.")
+        print("  No zlatna pravila bets yet.")
 
     # ── WEEKLY SIGNALS ──
     weekly_rows = []
@@ -980,7 +868,7 @@ def print_signal_map():
                 f"{r.get('bet', '')[:20]:<20}  "
                 f"{r.get('odds', ''):>5}  "
                 f"{r.get('drop_pct', ''):>7}  "
-                f"{r.get('consensus_flag', ''):>3}"
+                f"{r.get('market_consensus', ''):>3}"
             )
         print(f"  {'-'*95}")
         print(f"  Total: {len(weekly_rows)} weekly signals")

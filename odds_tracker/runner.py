@@ -20,9 +20,12 @@ from pathlib import Path
 
 # Fix Windows console encoding for Unicode symbols
 if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
     os.environ.setdefault('PYTHONIOENCODING', 'utf-8')
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 from odds_tracker.config import (
     ODDSPORTAL_LIVE_URL,
@@ -36,8 +39,6 @@ from odds_tracker.database import (
     get_unique_match_count, get_live_snapshot_count,
     get_all_upcoming_matches, get_all_signals_today,
     get_prematch_odds_bulk,
-    insert_bet_entry, settle_closing_for_open_bets,
-    settle_results_for_finished_bets,
 )
 from odds_tracker.scraper import scrape_odds
 from odds_tracker.live_scraper import scrape_live_odds
@@ -46,9 +47,9 @@ from odds_tracker.signals import generate_signals, format_signal, save_signals_t
 from odds_tracker.movement_logger import save_cycle_snapshot, generate_movement_summary
 from odds_tracker.signal_map import (
     SIGNAL_MAP_DIR,
-    write_live_signals, capture_final_bets, capture_novci,
+    write_live_signals, capture_final_bets, capture_zlatna_pravila,
     capture_week_signals,
-    format_golden_signal, format_novci_signal, format_weekly_signal,
+    format_golden_signal, format_zlatna_signal, format_weekly_signal,
     format_weekly_update,
     print_signal_map,
 )
@@ -57,6 +58,15 @@ from odds_tracker.value_betting import (
     analyze_prematch_value, analyze_all_live, format_value_bet, format_value_bet_short,
 )
 from odds_tracker.research import analyze_upcoming_match
+
+# Import PROFIT mode functions
+try:
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from profit import load_movement_data, detect_signals, write_profit_tsv, process_new_signals, load_alerted, save_alerted, add_paper_trade, resolve_paper_trades
+    PROFIT_MODE_AVAILABLE = True
+except ImportError:
+    PROFIT_MODE_AVAILABLE = False
 
 # ── Future match cache (persists between cycles) ──
 FUTURE_MATCH_CACHE = DATA_DIR / "future_match_cache.json"
@@ -68,7 +78,7 @@ def _save_future_cache(future_matches: list[dict]):
     cache = []
     seen = set()
     for m in future_matches:
-        key = f"{m.get('league', '')}|{m.get('_match_date', '')}|{m.get('kick_off', '')}|{m.get('home', '')}|{m.get('away', '')}"
+        key = f"{m.get('home', '')}|{m.get('away', '')}"
         if key not in seen:
             seen.add(key)
             cache.append({
@@ -76,8 +86,6 @@ def _save_future_cache(future_matches: list[dict]):
                 'away': m.get('away', ''),
                 'kick_off': m.get('kick_off', ''),
                 '_match_date': m.get('_match_date', ''),
-                'country': m.get('country', ''),
-                'league': m.get('league', ''),
                 'status': 'upcoming',
             })
     with open(FUTURE_MATCH_CACHE, 'w', encoding='utf-8') as f:
@@ -119,11 +127,11 @@ def run_one_cycle(cycle_num: int = 1, watch_list: list[str] | None = None, watch
         print("  ⚠ No matches scraped. Will retry next cycle.")
         return 0, []
 
-    # Set _match_date for today's matches (before tomorrow/future extend)
-    today_date = datetime.now().strftime('%Y-%m-%d')
+    # Mark today's matches with today's date
+    today_str = datetime.now().strftime('%Y-%m-%d')
     for m in matches:
-        if not m.get('_match_date'):
-            m['_match_date'] = today_date
+        m['_day'] = 'today'
+        m['_match_date'] = today_str
 
     # Also scrape tomorrow — EVERY cycle for fresh data
     if True:
@@ -165,20 +173,10 @@ def run_one_cycle(cycle_num: int = 1, watch_list: list[str] | None = None, watch
         return 0, []
 
     # Filter to upcoming only for saving (we still save finished for reference)
-    upcoming_all = [m for m in matches if m.get('status') == 'upcoming']
+    upcoming = [m for m in matches if m.get('status') == 'upcoming']
     finished = [m for m in matches if m.get('status') == 'finished']
 
-    # Deduplicate upcoming by (country, league, _match_date, kick_off, home, away)
-    seen_keys = {}
-    for m in upcoming_all:
-        key = (m.get('country', ''), m.get('league', ''),
-               m.get('_match_date', ''), m.get('kick_off', ''),
-               m.get('home', ''), m.get('away', ''))
-        if key not in seen_keys:
-            seen_keys[key] = m
-    upcoming = list(seen_keys.values())
-
-    print(f"  [OK] Scraped {len(matches)} matches ({len(upcoming)} unique upcoming, {len(finished)} finished)")
+    print(f"  [OK] Scraped {len(matches)} matches ({len(upcoming)} upcoming, {len(finished)} finished)")
 
     # Save all to database
     saved = save_snapshot(matches)
@@ -202,11 +200,10 @@ def run_one_cycle(cycle_num: int = 1, watch_list: list[str] | None = None, watch
         ko = m.get('kick_off', '')
         if ko:
             try:
-                match_date = m.get('_match_date') or now.strftime('%Y-%m-%d')
-                ko_dt = datetime.strptime(f"{match_date} {ko}", '%Y-%m-%d %H:%M')
+                today_str = now.strftime('%Y-%m-%d')
+                ko_dt = datetime.strptime(f"{today_str} {ko}", '%Y-%m-%d %H:%M')
                 minutes_to_ko = (ko_dt - now).total_seconds() / 60
                 m['_minutes_to_ko'] = minutes_to_ko
-                m['_kickoff_dt'] = ko_dt.isoformat()
                 if 0 < minutes_to_ko <= 120:
                     priority_matches.append(m)
                 elif minutes_to_ko > 0:
@@ -236,52 +233,22 @@ def run_one_cycle(cycle_num: int = 1, watch_list: list[str] | None = None, watch
     match_date_lookup = {}
     for m in upcoming:
         if m.get('_match_date'):
-            key = (m.get('home', ''), m.get('away', ''), m.get('kick_off', ''))
+            key = (m.get('home', ''), m.get('away', ''))
             match_date_lookup[key] = m['_match_date']
     for s in signals:
-        if not s.get('_match_date'):
-            key = (s.get('home', ''), s.get('away', ''), s.get('kick_off', ''))
-            if key in match_date_lookup:
-                s['_match_date'] = match_date_lookup[key]
+        key = (s.get('home', ''), s.get('away', ''))
+        if key in match_date_lookup:
+            s['_match_date'] = match_date_lookup[key]
 
     if signals:
         save_signals_to_db(signals)
-
-        # Separate actionable (T1-T3) from WATCH (T0) signals
-        actionable = [s for s in signals if s.get('tier', 0) > 0]
-        watching = [s for s in signals if s.get('tier', 0) == 0]
-
-        if actionable:
-            print(f"\n  🎰 {len(actionable)} ACTIONABLE SIGNALS (Tier 1-3, ≤30min do KO):")
-            print(f"  {'─'*70}")
-            for s in actionable:
-                formatted = format_signal(s)
-                for line in formatted.split('\n'):
-                    print(f"    {line}")
-                print()
-
-        if watching:
-            print(f"\n  👀 {len(watching)} WATCH SIGNALS (>30min do KO — praćenje):")
-            print(f"  {'─'*70}")
-            for s in watching:
-                formatted = format_signal(s)
-                for line in formatted.split('\n'):
-                    print(f"    {line}")
-                print()
-
-            # Save all WATCH signals to TSV
-            _save_watch_signals_tsv(watching)
-
-        if not actionable:
-            print(f"\n  ℹ {len(signals)} signals generated (all WATCH — no matches within 30min window)")
-
-        # Show bankroll status
-        try:
-            from odds_tracker.staking import BankrollManager
-            mgr = BankrollManager()
-            print(mgr.format_status())
-        except Exception:
-            pass
+        print(f"\n  🎰 {len(signals)} SIGNALS Generated:")
+        print(f"  {'─'*60}")
+        for s in signals[:20]:
+            formatted = format_signal(s)
+            for line in formatted.split('\n'):
+                print(f"    {line}")
+            print()
     else:
         print("  ℹ No strong signals yet. Need more data points (keep scraping).")
         if total_snapshots < 3:
@@ -366,7 +333,8 @@ def run_one_cycle(cycle_num: int = 1, watch_list: list[str] | None = None, watch
                 'reason': dv.get('reason', ''),
             })
 
-    # LIVE_SIGNALS TSV removed — focusing on pre-match only
+    live_count = write_live_signals(all_signal_entries, value_bets)
+    print(f"\n  [LIVE] {live_count} signals written to LIVE_SIGNALS TSV")
 
     if value_bets:
         print(f"\n  💰 {len(value_bets)} VALUE BETS detected (pre-match):")
@@ -384,19 +352,17 @@ def run_one_cycle(cycle_num: int = 1, watch_list: list[str] | None = None, watch
             print(format_golden_signal(row))
         print(f"  {'\u2500'*70}")
 
-    # Capture NOVCI — only the BEST signals (golden rules filter)
-    novci_new = capture_novci(all_signal_entries, value_bets)
-    if novci_new:
-        print(f"\n  \u2B50 NOVCI — {len(novci_new)} BEST bets captured (golden rules):")
+    # Capture ZLATNA PRAVILA — only the BEST signals (golden rules filter)
+    zlatna_new = capture_zlatna_pravila(all_signal_entries, value_bets)
+    if zlatna_new:
+        print(f"\n  \u2B50 ZLATNA PRAVILA — {len(zlatna_new)} BEST bets captured (golden rules):")
         print(f"  {'\u2500'*70}")
-        for row in novci_new:
-            print(format_novci_signal(row))
+        for row in zlatna_new:
+            print(format_zlatna_signal(row))
         print(f"  {'\u2500'*70}")
-        # Record bet entries for CLV tracking
-        _record_bet_entries(novci_new, all_signal_entries)
     else:
         # Always show status
-        print(f"  [NOVCI] No new bets this cycle (window: 0-29min, T1-T3, conf>=75%, drop>=5%, odds<=3.50)")
+        print(f"  [ZLATNA] No new golden-rule bets this cycle (filters: STEAM/LATE_SHARP, >=90% conf, >=8% drop, no draws, odds<=3.50)")
 
     # Capture WEEKLY SIGNALS — runs EVERY cycle (uses cache when futures aren't scraped)
     try:
@@ -447,17 +413,6 @@ def run_one_cycle(cycle_num: int = 1, watch_list: list[str] | None = None, watch
     try:
         live_matches = scrape_live_odds(headless=HEADLESS, timeout_ms=PAGE_TIMEOUT_MS)
         if live_matches:
-            # Filter out finished matches (FT, ET, Pen, AET) — safety net
-            _finished = {'FT', 'ET', 'PEN.', 'PEN', 'AET'}
-            active_matches = [
-                m for m in live_matches
-                if str(m.get('minute', '')).upper() not in _finished
-            ]
-            skipped = len(live_matches) - len(active_matches)
-            if skipped:
-                print(f"  ℹ Skipped {skipped} finished match(es)")
-            live_matches = active_matches
-
             saved_live = save_live_snapshot(live_matches)
             live_total = get_live_snapshot_count()
             print(f"  [OK] {len(live_matches)} live matches scraped (DB: {live_total} live snapshots)")
@@ -473,12 +428,15 @@ def run_one_cycle(cycle_num: int = 1, watch_list: list[str] | None = None, watch
                     print(format_value_bet(lv))
                     print()
 
-                # Capture live value bets to NOVCI (no more LIVE_VALUE TSV)
-                novci_live = _capture_novci_live(live_values)
-                if novci_live:
-                    print(f"  ⭐ NOVCI — {len(novci_live)} LIVE bets captured!")
-                    for row in novci_live:
-                        print(format_novci_signal(row))
+                # Write live value bets to a separate TSV
+                _save_live_value_tsv(live_values)
+
+                # Also capture live value bets to ZLATNA_PRAVILA
+                zlatna_live = _capture_zlatna_live(live_values)
+                if zlatna_live:
+                    print(f"  ⭐ ZLATNA PRAVILA — {len(zlatna_live)} LIVE bets captured!")
+                    for row in zlatna_live:
+                        print(format_zlatna_signal(row))
                 # --- Run match watcher for any watched matches (console alerts) ---
                 if watch_list:
                     try:
@@ -505,58 +463,44 @@ def run_one_cycle(cycle_num: int = 1, watch_list: list[str] | None = None, watch
     # Log cycle completion
     _log_cycle(cycle_num, len(matches), len(signals))
 
-    # ── 6. CLV + SETTLEMENT WORKERS (idempotent, run every cycle) ──
-    try:
-        closed = settle_closing_for_open_bets()
-        if closed:
-            print(f"  [CLV] Settled closing odds for {closed} bet(s)")
-    except Exception as e:
-        print(f"  ⚠ CLV settle error: {e}")
-
-    try:
-        settled = settle_results_for_finished_bets()
-        if settled:
-            print(f"  [SETTLE] Settled results for {settled} bet(s)")
-    except Exception as e:
-        print(f"  ⚠ Result settle error: {e}")
+    # ── 5. PROFIT MODE — Auto-generate profit.tsv ──
+    if PROFIT_MODE_AVAILABLE:
+        try:
+            print("\n[5/5] Updating PROFIT signals...")
+            profit_df = load_movement_data(days=3)
+            if len(profit_df) > 0:
+                profit_signals = detect_signals(profit_df)
+                if profit_signals:
+                    # Load alerted state
+                    alerted = load_alerted()
+                    
+                    # Process new signals (add to paper trades)
+                    new_count = 0
+                    for sig in profit_signals:
+                        key = f"{sig['match_key']}_{sig['tip']}"
+                        if key not in alerted:
+                            alerted.add(key)
+                            add_paper_trade(sig)
+                            new_count += 1
+                            print(f"  📊 NEW: {sig['match']} | {sig['bet']} @ {sig['odds']} | Drop {sig['drop_pct']}%")
+                    
+                    # Save alerted state
+                    save_alerted(alerted)
+                    
+                    # Write profit.tsv
+                    write_profit_tsv(profit_signals)
+                    print(f"  ✓ profit.tsv updated: {len(profit_signals)} signals ({new_count} new)")
+                    
+                    # Try to resolve finished trades
+                    resolve_paper_trades()
+                else:
+                    print("  ℹ No PROFIT signals found.")
+            else:
+                print("  ⚠ No movement data for PROFIT mode.")
+        except Exception as e:
+            print(f"  ⚠ PROFIT mode error: {e}")
 
     return len(matches), signals
-
-
-def _record_bet_entries(novci_rows: list[dict], all_signals: list[dict]):
-    """Record bet_entry in DB for newly captured NOVCI signals."""
-    if not novci_rows:
-        return
-    captured_keys = set()
-    for row in novci_rows:
-        captured_keys.add((row.get('match', ''), row.get('bet', '')))
-
-    for s in all_signals:
-        match_str = f"{s.get('home', '?')} vs {s.get('away', '?')}"
-        bet = s.get('bet', '')
-        if bet == '1':
-            bet_label = f"1 ({s.get('home', '?')})"
-        elif bet == 'X':
-            bet_label = 'X (Draw)'
-        elif bet == '2':
-            bet_label = f"2 ({s.get('away', '?')})"
-        else:
-            bet_label = bet
-
-        if (match_str, bet_label) in captured_keys:
-            try:
-                insert_bet_entry(
-                    match_id=s.get('match_id', ''),
-                    home_team=s.get('home', ''),
-                    away_team=s.get('away', ''),
-                    bet=bet,
-                    kickoff_utc=s.get('kickoff_utc', ''),
-                    entry_odds=s.get('latest_odds', 0),
-                    stake=s.get('stake_amount', 0),
-                )
-                captured_keys.discard((match_str, bet_label))
-            except Exception as e:
-                print(f"  \u26a0 bet_entry error: {e}")
 
 
 def _save_live_value_tsv(value_bets: list[dict]):
@@ -591,74 +535,18 @@ def _save_live_value_tsv(value_bets: list[dict]):
             })
 
 
-def _save_watch_signals_tsv(watch_signals: list[dict]):
-    """Save all WATCH signals to a TSV file (overwritten each cycle)."""
-    import csv
-    tsv_dir = DATA_DIR / "signal_map"
-    tsv_dir.mkdir(exist_ok=True)
-    now = datetime.now()
-    tsv_path = tsv_dir / f"WATCH_SIGNALS_{now.strftime('%Y-%m-%d')}.tsv"
-
-    columns = [
-        'captured_at', 'match_id', 'kick_off', 'kickoff_utc',
-        'match', 'bet', 'odds', 'opening',
-        'drop_from_open', 'drop_last_60', 'retrace_last_30',
-        'snapshots', 'snapshots_last_60',
-        'confidence', 'consensus_flag', 'steam_flag',
-        'market_margin', 'min_to_ko', 'type', 'reason',
-    ]
-
-    with open(tsv_path, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=columns, delimiter='\t')
-        writer.writeheader()
-        for s in watch_signals:
-            match_str = f"{s['home']} vs {s['away']}"
-            bet = s.get('bet', '')
-            if bet == '1':
-                bet_str = f"1 ({s['home']})"
-            elif bet == '2':
-                bet_str = f"2 ({s['away']})"
-            elif bet == 'X':
-                bet_str = "X (Remi)"
-            else:
-                bet_str = bet
-
-            writer.writerow({
-                'captured_at': now.strftime('%H:%M:%S'),
-                'match_id': s.get('match_id', ''),
-                'kick_off': s.get('kick_off', ''),
-                'kickoff_utc': s.get('kickoff_utc', ''),
-                'match': match_str,
-                'bet': bet_str,
-                'odds': round(s.get('latest_odds', 0), 3),
-                'opening': round(s.get('opening_odds', 0), 3),
-                'drop_from_open': round(s.get('drop_from_open', 0), 4),
-                'drop_last_60': round(s.get('drop_last_60', 0), 4),
-                'retrace_last_30': round(s.get('retrace_last_30', 0), 4),
-                'snapshots': s.get('snapshots', 0),
-                'snapshots_last_60': s.get('snapshots_last_60', 0),
-                'confidence': round(s.get('confidence', 0), 3),
-                'consensus_flag': s.get('consensus_flag', 0),
-                'steam_flag': s.get('steam_flag', 0),
-                'market_margin': round(s.get('market_margin', 0), 4),
-                'min_to_ko': int(s.get('minutes_to_ko', 0)),
-                'type': s.get('signal_type', ''),
-                'reason': s.get('reason', ''),
-            })
-
-
-def _capture_novci_live(live_values: list[dict]) -> list[dict]:
+def _capture_zlatna_live(live_values: list[dict]) -> list[dict]:
     """
-    Capture best live value bets to NOVCI file.
+    Capture best live value bets to ZLATNA_PRAVILA file.
     Uses strict golden rules: edge >=12%, confidence >=65%, tier 3-4,
     minute 15-70, home leading or away leading (not recovery).
     """
     import csv
     import math
-    from odds_tracker.signal_map import SIGNAL_MAP_DIR, NOVCI_COLUMNS
+    from odds_tracker.signal_map import SIGNAL_MAP_DIR, ZLATNA_COLUMNS
 
     now = datetime.now()
-    tsv_path = SIGNAL_MAP_DIR / f"NOVCI_{now.strftime('%Y-%m-%d')}.tsv"
+    tsv_path = SIGNAL_MAP_DIR / f"ZLATNA_PRAVILA_{now.strftime('%Y-%m-%d')}.tsv"
 
     # Load existing keys to prevent duplicates
     existing_keys = set()
@@ -683,7 +571,7 @@ def _capture_novci_live(live_values: list[dict]) -> list[dict]:
         except (ValueError, TypeError):
             minute = 0
 
-        # ── NOVCI LIVE RULES ──
+        # ── ZLATNA LIVE RULES ──
         if edge < 0.12:          # minimum 12% edge
             continue
         if conf < 0.60:          # minimum 60% confidence
@@ -708,25 +596,17 @@ def _capture_novci_live(live_values: list[dict]) -> list[dict]:
 
         row = {
             'captured_at': now.strftime('%H:%M:%S'),
-            'match_id': '',
             'kick_off': f"LIVE {lv.get('minute', '?')}'",
-            'kickoff_utc': '',
-            'min_to_ko': -1,
+            'min_to_ko': 'LIVE',
             'match': match_str,
             'bet': bet_label,
-            'odds': round(lv.get('offered_odds', 0), 3),
-            'opening': round(lv.get('fair_odds', 0), 3),
-            'drop_pct': round(edge, 4),
-            'drop_from_open': 0,
-            'drop_last_60': 0,
-            'retrace_last_30': 0,
-            'snapshots': 0,
-            'snapshots_last_60': 0,
-            'confidence': round(conf, 3),
-            'consensus_flag': 0,
-            'steam_flag': 0,
-            'market_margin': 0,
-            'score': round(score, 1),
+            'odds': f"{lv.get('offered_odds', 0):.2f}",
+            'opening': f"{lv.get('fair_odds', 0):.2f}",
+            'drop_pct': f"{edge:+.1%}",
+            'snapshots': f"T{tier}",
+            'confidence': f"{conf:.0%}",
+            'score': f"{score:.1f}",
+            'market_consensus': lv.get('score', ''),
             'type': 'LIVE_VALUE',
             'reason': lv.get('reason', ''),
         }
@@ -742,8 +622,7 @@ def _capture_novci_live(live_values: list[dict]) -> list[dict]:
     # Write (append)
     file_exists = tsv_path.exists()
     with open(tsv_path, 'a', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=NOVCI_COLUMNS, delimiter='\t',
-                                extrasaction='ignore')
+        writer = csv.DictWriter(f, fieldnames=ZLATNA_COLUMNS, delimiter='\t')
         if not file_exists:
             writer.writeheader()
         writer.writerows(candidates)
@@ -776,7 +655,7 @@ def run_continuous(watch_list: list[str] | None = None, watch_edge: float | None
 ║                                                              ║
 ║  Pre-match scraping every {SCRAPE_INTERVAL_SECONDS:3d}s from OddsPortal            ║
 ║  Live in-play scraping + Poisson value betting model         ║
-║  NOVCI: best bets auto-captured                     ║
+║  ZLATNA PRAVILA: best bets auto-captured                     ║
 ║  Press Ctrl+C to stop and generate report                    ║
 ╚══════════════════════════════════════════════════════════════╝
 """)

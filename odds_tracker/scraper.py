@@ -224,7 +224,10 @@ def _scroll_and_expand(page: Page, max_scrolls: int = 60) -> int:
     Also clicks 'show more' buttons to expand collapsed league sections.
     Returns final page height.
     """
-    # First, try to click any 'show more' buttons visible before scrolling
+    # First close any modal overlays
+    _close_modals(page)
+    
+    # Then try to click any 'show more' buttons visible before scrolling
     _click_show_more(page)
     
     prev_height = 0
@@ -268,6 +271,51 @@ def _click_show_more(page: Page):
         pass
 
 
+def _close_modals(page: Page):
+    """Close any modal overlays that might block clicks."""
+    try:
+        # Close bookie modal overlay
+        modal_selectors = [
+            'div.overlay-bookie-modal',
+            'div[class*="overlay"]',
+            'div[class*="modal"]',
+            'button[class*="close"]',
+            'button:has-text("×")',
+            'button:has-text("Close")',
+            'a[class*="close"]',
+        ]
+        for selector in modal_selectors:
+            try:
+                elements = page.locator(selector)
+                for i in range(elements.count()):
+                    el = elements.nth(i)
+                    if el.is_visible():
+                        # Try clicking close button or just hide the modal
+                        try:
+                            el.click(timeout=1000)
+                        except:
+                            # Force hide via JS
+                            page.evaluate(f"document.querySelectorAll('{selector}').forEach(e => e.style.display = 'none')")
+                        time.sleep(0.3)
+            except:
+                pass
+        
+        # Also try pressing Escape key to close modals
+        page.keyboard.press('Escape')
+        time.sleep(0.3)
+        
+        # Force hide any overlay via JS
+        page.evaluate("""
+            document.querySelectorAll('[class*="overlay"], [class*="modal"]').forEach(el => {
+                if (el.style.position === 'fixed' || el.style.position === 'absolute') {
+                    el.style.display = 'none';
+                }
+            });
+        """)
+    except Exception:
+        pass
+
+
 def _has_next_page(page: Page) -> bool:
     """Check if a 'next matches' link exists."""
     try:
@@ -280,11 +328,35 @@ def _has_next_page(page: Page) -> bool:
 def _click_next_page(page: Page) -> bool:
     """Click the 'next matches' link and wait for new page to load. Returns True on success."""
     try:
+        # First close any modal overlays
+        _close_modals(page)
+        time.sleep(0.5)
+        
         link = page.locator('a:has-text("next matches")')
         if link.count() > 0 and link.first.is_visible():
-            link.first.click()
+            # Try multiple click methods
+            try:
+                # Method 1: Force click (ignores overlays)
+                link.first.click(force=True, timeout=10000)
+            except:
+                try:
+                    # Method 2: JavaScript click
+                    page.evaluate("""
+                        const link = document.querySelector('a[href*="matches"]');
+                        if (link && link.textContent.toLowerCase().includes('next')) {
+                            link.click();
+                        }
+                    """)
+                except:
+                    # Method 3: Navigate directly
+                    href = link.first.get_attribute('href')
+                    if href:
+                        if not href.startswith('http'):
+                            href = 'https://www.oddsportal.com' + href
+                        page.goto(href, wait_until='networkidle', timeout=60000)
+            
             time.sleep(3)
-            page.wait_for_load_state('networkidle', timeout=30000)
+            page.wait_for_load_state('networkidle', timeout=60000)
             time.sleep(1)
             return True
     except Exception as e:
@@ -319,8 +391,12 @@ def scrape_odds(url: str, headless: bool = True, timeout_ms: int = 60000) -> lis
             except Exception:
                 pass
 
+            # Close any modal overlays that appeared
+            _close_modals(page)
+            time.sleep(1)
+
             page_num = 1
-            max_pages = 10  # safety limit
+            max_pages = 15  # increased for weekend days with more matches
             
             while page_num <= max_pages:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] === Page {page_num} ===")

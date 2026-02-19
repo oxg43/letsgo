@@ -18,7 +18,6 @@ Signal Flow:
     6. Izračunaj stake → Kelly ¼ prema tieru i pravilima
     7. Generiraj signal dict s tier oznakom, stake preporukom, razlogom
 """
-import hashlib
 from datetime import datetime, timedelta
 
 from odds_tracker.analyzer import analyze_match
@@ -65,13 +64,6 @@ def _compute_minutes_to_ko(match: dict, now: datetime = None) -> float | None:
         return None
 
 
-def _compute_match_id(country: str, league: str, match_date: str,
-                      kick_off: str, home: str, away: str) -> str:
-    """Deterministic 12-char hex match id."""
-    raw = f"{country}|{league}|{match_date}|{kick_off}|{home}|{away}"
-    return hashlib.md5(raw.encode()).hexdigest()[:12]
-
-
 # ═══════════════════════════════════════════════════════════════════
 #  CORE: Drop % Calculation
 # ═══════════════════════════════════════════════════════════════════
@@ -106,6 +98,10 @@ def _check_anti_filters(
 ) -> tuple[bool, str]:
     """
     Check if a signal should be BLOCKED by anti-filters.
+    
+    Updated 2026-02-18: Added banned_odds_ranges and banned_drop_ranges
+    based on professional analysis. Confidence filter is separate (after
+    confidence is computed).
 
     Returns (is_blocked, reason).
     """
@@ -132,6 +128,22 @@ def _check_anti_filters(
             f'{outcome} drop {drop_pct:.1f}% < min {of["min_drop_pct"]:.1f}% '
             f'(nedovoljan signal)'
         )
+    
+    # NEW: Banned odds ranges (e.g., 1.30-1.50 loses -29% edge)
+    for lo, hi in of.get('banned_odds_ranges', []):
+        if lo <= closing_odds < hi:
+            return True, (
+                f'{outcome} odds {closing_odds:.2f} u zabranjenom rasponu [{lo:.2f}-{hi:.2f}] '
+                f'(negativan edge u analizi)'
+            )
+    
+    # NEW: Banned drop % ranges (e.g., 6-10% loses -34.5% ROI)
+    for lo, hi in of.get('banned_drop_ranges', []):
+        if lo <= drop_pct < hi:
+            return True, (
+                f'{outcome} drop {drop_pct:.1f}% u zabranjenom rasponu [{lo:.0f}%-{hi:.0f}%] '
+                f'(middle drops gube -34.5% ROI)'
+            )
 
     return False, ''
 
@@ -283,6 +295,13 @@ def _evaluate_outcome(analysis: dict, outcome: str, match: dict) -> dict | None:
     # -- Compute confidence (for backward compat + ZLATNA) --
     confidence = _compute_confidence(analysis, outcome, drop_pct, minutes_to_ko, snapshots, tier)
 
+    # -- Confidence filter (NEW 2026-02-18: <80% loses -17% to -43% ROI) --
+    min_conf = ANTI_FILTERS.get('global', {}).get('min_confidence', 0.0)
+    if min_conf > 0 and confidence < min_conf:
+        # Log blocked signal for tracking
+        # print(f"[BLOCKED] {outcome} confidence {confidence:.0%} < {min_conf:.0%}")
+        return None
+
     # -- Calculate stake --
     bankroll = STAKING['initial_bankroll']
     try:
@@ -322,67 +341,6 @@ def _evaluate_outcome(analysis: dict, outcome: str, match: dict) -> dict | None:
     pct_change = analysis.get(pct_key, 0)
     trend_key = f'trend_{outcome.lower()}'
     trend = analysis.get(trend_key, 'unknown')
-
-    # -- Structured numeric fields (TASK 3) --
-    match_date_str = match.get('_match_date', '') or now.strftime('%Y-%m-%d')
-    ko_str_raw = analysis.get('kick_off', match.get('kick_off', ''))
-    match_id = _compute_match_id(
-        match.get('country', ''), league, match_date_str,
-        ko_str_raw,
-        analysis.get('home', match.get('home', '')),
-        analysis.get('away', match.get('away', '')),
-    )
-    try:
-        kickoff_utc = datetime.strptime(
-            f"{match_date_str} {ko_str_raw}", '%Y-%m-%d %H:%M'
-        ).isoformat()
-    except ValueError:
-        kickoff_utc = ''
-
-    # drop_from_open: signed ratio (negative = odds fell)
-    drop_from_open = ((latest_odds - opening_odds) / opening_odds
-                      if opening_odds > 1.0 else 0.0)
-
-    # snapshots_last_60, drop_last_60, retrace_last_30
-    history = analysis.get('history', [])
-    odds_col_map = {'1': 'odds_1', 'X': 'odds_x', '2': 'odds_2'}
-    odds_col = odds_col_map[outcome]
-    cutoff_60 = (now - timedelta(minutes=60)).isoformat()
-    cutoff_30 = (now - timedelta(minutes=30)).isoformat()
-
-    snapshots_last_60 = sum(1 for h in history if h.get('time', '') >= cutoff_60)
-
-    recent_60 = [h for h in history
-                 if h.get('time', '') >= cutoff_60 and h.get(odds_col)]
-    if len(recent_60) >= 2:
-        first_r = recent_60[0][odds_col]
-        last_r = recent_60[-1][odds_col]
-        drop_last_60 = ((last_r - first_r) / first_r
-                        if first_r > 1.0 else 0.0)
-    else:
-        drop_last_60 = 0.0
-
-    recent_30 = [h for h in history
-                 if h.get('time', '') >= cutoff_30 and h.get(odds_col)]
-    if len(recent_30) >= 2:
-        min_odds_30 = min(h[odds_col] for h in recent_30)
-        last_odds_30 = recent_30[-1][odds_col]
-        retrace_last_30 = ((last_odds_30 - min_odds_30) / min_odds_30
-                           if min_odds_30 > 1.0 and last_odds_30 > min_odds_30
-                           else 0.0)
-    else:
-        retrace_last_30 = 0.0
-
-    consensus_flag = 1 if others_rising else 0
-    steam_flag = 1 if analysis.get('steam_move') == outcome else 0
-
-    o1 = analysis['latest_odds'].get('1') or 0
-    ox = analysis['latest_odds'].get('X') or 0
-    o2 = analysis['latest_odds'].get('2') or 0
-    if o1 > 1.0 and ox > 1.0 and o2 > 1.0:
-        market_margin = round((1/o1 + 1/ox + 1/o2) - 1.0, 4)
-    else:
-        market_margin = 0.0
 
     # -- Build signal dict --
     signal = {
@@ -424,19 +382,6 @@ def _evaluate_outcome(analysis: dict, outcome: str, match: dict) -> dict | None:
         'kelly_full_pct': stake_info['kelly_full_pct'],
         'kelly_used_pct': stake_info['kelly_used_pct'],
         'staking_method': stake_info['method'],
-
-        # Structured numeric columns (TASK 3)
-        'match_id': match_id,
-        '_match_date': match_date_str,
-        'kickoff_utc': kickoff_utc,
-        'snapshots_total': snapshots,
-        'snapshots_last_60': snapshots_last_60,
-        'drop_from_open': round(drop_from_open, 4),
-        'drop_last_60': round(drop_last_60, 4),
-        'retrace_last_30': round(retrace_last_30, 4),
-        'consensus_flag': consensus_flag,
-        'steam_flag': steam_flag,
-        'market_margin': market_margin,
 
         # Metadata
         'reason': ' | '.join(reasons),
@@ -575,16 +520,20 @@ def generate_signals(matches: list[dict]) -> list[dict]:
     seen_matches = set()  # Enforce max 1 bet per match
     seen_watch = set()    # Deduplicate WATCH signals per match+outcome
 
-    # Deduplicate input matches by (country, league, _match_date, kick_off, home, away)
+    # Deduplicate input matches by (home, away) — keep earliest _match_date
     deduped = {}
     for m in matches:
         home = m.get('home', m.get('home_team', ''))
         away = m.get('away', m.get('away_team', ''))
-        key = (m.get('country', ''), m.get('league', ''),
-               m.get('_match_date', ''), m.get('kick_off', ''),
-               home, away)
+        key = f"{home}|{away}"
         if key not in deduped:
             deduped[key] = m
+        else:
+            # Keep the entry with the earliest _match_date (closest to actual match)
+            existing_date = deduped[key].get('_match_date', '9999-99-99')
+            new_date = m.get('_match_date', '9999-99-99')
+            if new_date < existing_date:
+                deduped[key] = m
 
     for m in deduped.values():
         if m.get('status') in ('finished', 'live'):
