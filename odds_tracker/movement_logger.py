@@ -29,7 +29,7 @@ def save_cycle_snapshot(matches: list[dict], cycle_num: int = 0):
     # ── 1. Individual cycle file ──
     cycle_path = MOVEMENT_DIR / f"{ts}_cycle{cycle_num}.csv"
     fieldnames = [
-        'scraped_at', 'kick_off', 'country', 'league',
+        'scraped_at', 'match_date', 'kick_off', 'country', 'league',
         'home', 'away', 'odds_1', 'odds_x', 'odds_2',
         'score', 'status'
     ]
@@ -39,6 +39,7 @@ def save_cycle_snapshot(matches: list[dict], cycle_num: int = 0):
         for m in matches:
             writer.writerow({
                 'scraped_at': now.isoformat(),
+                'match_date': m.get('_match_date', now.strftime('%Y-%m-%d')),
                 'kick_off': m.get('kick_off', ''),
                 'country': m.get('country', ''),
                 'league': m.get('league', ''),
@@ -62,6 +63,7 @@ def save_cycle_snapshot(matches: list[dict], cycle_num: int = 0):
             writer.writerow({
                 'cycle': cycle_num,
                 'scraped_at': now.isoformat(),
+                'match_date': m.get('_match_date', now.strftime('%Y-%m-%d')),
                 'kick_off': m.get('kick_off', ''),
                 'country': m.get('country', ''),
                 'league': m.get('league', ''),
