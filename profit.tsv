@@ -72,20 +72,20 @@ time	date	kick_off	match	bet	tip	odds	opening	drop_pct	confidence	stake	tier	sna
 00:50:21	2026-02-21	20:00	Gurupi vs Tocantinopolis	HOME	1	2.91	3.48	16.4	85	4%	1	176	PENDING	Drop 16.4% | Conf 85% | 176 snaps
 00:50:21	2026-02-21	20:00	Independente AP vs Oratorio	DRAW	X	2.47	3.1	20.3	80	4%	1	184	PENDING	Drop 20.3% | Conf 80% | 184 snaps
 00:50:21	2026-02-21	23:00	Bandeirante vs Francana	HOME	1	2.18	2.61	16.5	80	4%	1	200	PENDING	Drop 16.5% | Conf 80% | 200 snaps
-00:50:21	2026-02-22	01:00	Tigres de Alica vs Cimarrones de Sonora	HOME	1	2.81	4.1	31.5	90	5%	1	156	PENDING	Drop 31.5% | Conf 90% | 156 snaps
-00:50:21	2026-02-22	01:00	Tigres de Alica vs Cimarrones de Sonora	DRAW	X	3.32	3.95	15.9	80	2%	2	156	PENDING	Drop 15.9% | Conf 80% | 156 snaps
-00:50:21	2026-02-22	04:00	Navua vs Nadi	HOME	1	2.55	2.91	12.4	80	4%	1	130	PENDING	Drop 12.4% | Conf 80% | 130 snaps
-00:50:21	2026-02-22	05:00	Central Coast Mariners U23 vs Dulwich Hill	HOME	1	1.87	2.6	28.1	85	4%	1	377	PENDING	Drop 28.1% | Conf 85% | 377 snaps
-00:50:21	2026-02-22	06:15	Brisbane Roar U23 vs Brisbane City	HOME	1	2.38	4.12	42.2	90	5%	1	377	PENDING	Drop 42.2% | Conf 90% | 377 snaps
-00:50:21	2026-02-22	10:00	Tunari vs Selimbar	HOME	1	2.95	3.79	22.2	85	4%	1	377	PENDING	Drop 22.2% | Conf 85% | 377 snaps
-00:50:21	2026-02-22	12:00	SJK Akatemia vs KaPa	HOME	1	1.78	1.98	10.1	85	4%	1	244	PENDING	Drop 10.1% | Conf 85% | 244 snaps
-00:50:21	2026-02-22	14:00	Szentlorinc vs Mezokovesd-Zsory	HOME	1	2.53	3.28	22.9	85	4%	1	376	PENDING	Drop 22.9% | Conf 85% | 376 snaps
-00:50:21	2026-02-22	15:00	Cercle Brugge KSV 2 vs Ninove	HOME	1	1.52	1.72	11.6	80	4%	1	59	PENDING	Drop 11.6% | Conf 80% | 59 snaps
-00:50:21	2026-02-22	16:00	Hesperange vs Kaerjeng	HOME	1	2.2	2.6	15.4	85	4%	1	35	PENDING	Drop 15.4% | Conf 85% | 35 snaps
-00:50:21	2026-02-22	16:45	AZ Alkmaar vs Sparta Rotterdam	HOME	1	1.93	2.2	12.3	80	4%	1	377	PENDING	Drop 12.3% | Conf 80% | 377 snaps
-00:50:21	2026-02-23	22:00	Cucuta vs Deportes Tolima	HOME	1	2.47	2.96	16.6	85	4%	1	251	PENDING	Drop 16.6% | Conf 85% | 251 snaps
-00:50:21	2026-02-23	23:00	Cruzeiro W vs Santos W	HOME	1	1.5	2.18	31.2	90	5%	1	252	PENDING	Drop 31.2% | Conf 90% | 252 snaps
-00:50:21	2026-02-25	14:30	Persebaya vs PSM Makassar	HOME	1	1.9	2.15	11.6	80	4%	1	21	PENDING	Drop 11.6% | Conf 80% | 21 snaps
-00:50:21	2026-02-25	20:30	Petrojet vs Al Ittihad	HOME	1	1.77	2.5	29.2	90	5%	1	161	PENDING	Drop 29.2% | Conf 90% | 161 snaps
-00:50:21	2026-02-25	21:00	San Martin S.J. vs Deportivo Madryn	DRAW	X	2.79	3.5	20.3	80	4%	1	250	PENDING	Drop 20.3% | Conf 80% | 250 snaps
-00:50:21	2026-02-28	15:00	Empoli vs Cesena	HOME	1	2.36	2.65	10.9	80	4%	1	11	PENDING	Drop 10.9% | Conf 80% | 11 snaps
+00:50:21	2026-02-22	01:00	Tigres de Alica vs Cimarrones de Sonora	HOME	1	2.83	4.1	31.0	90	5%	1	159	PENDING	Drop 31.0% | Conf 90% | 159 snaps
+00:50:21	2026-02-22	01:00	Tigres de Alica vs Cimarrones de Sonora	DRAW	X	3.26	3.95	17.5	80	2%	2	159	PENDING	Drop 17.5% | Conf 80% | 159 snaps
+00:50:21	2026-02-22	04:00	Navua vs Nadi	HOME	1	2.53	2.91	13.1	80	4%	1	133	PENDING	Drop 13.1% | Conf 80% | 133 snaps
+00:50:21	2026-02-22	05:00	Central Coast Mariners U23 vs Dulwich Hill	HOME	1	1.87	2.6	28.1	85	4%	1	380	PENDING	Drop 28.1% | Conf 85% | 380 snaps
+00:50:21	2026-02-22	06:15	Brisbane Roar U23 vs Brisbane City	HOME	1	2.36	4.12	42.7	90	5%	1	380	PENDING	Drop 42.7% | Conf 90% | 380 snaps
+00:50:21	2026-02-22	10:00	Tunari vs Selimbar	HOME	1	2.62	3.79	30.9	85	4%	1	380	PENDING	Drop 30.9% | Conf 85% | 380 snaps
+00:50:21	2026-02-22	12:00	SJK Akatemia vs KaPa	HOME	1	1.78	1.98	10.1	85	4%	1	247	PENDING	Drop 10.1% | Conf 85% | 247 snaps
+00:50:21	2026-02-22	14:00	Szentlorinc vs Mezokovesd-Zsory	HOME	1	2.53	3.28	22.9	85	4%	1	379	PENDING	Drop 22.9% | Conf 85% | 379 snaps
+00:50:21	2026-02-22	15:00	Cercle Brugge KSV 2 vs Ninove	HOME	1	1.52	1.72	11.6	80	4%	1	62	PENDING	Drop 11.6% | Conf 80% | 62 snaps
+00:50:21	2026-02-22	16:00	Hesperange vs Kaerjeng	HOME	1	2.21	2.6	15.0	80	4%	1	38	PENDING	Drop 15.0% | Conf 80% | 38 snaps
+00:50:21	2026-02-22	16:45	AZ Alkmaar vs Sparta Rotterdam	HOME	1	1.93	2.2	12.3	80	4%	1	380	PENDING	Drop 12.3% | Conf 80% | 380 snaps
+00:50:21	2026-02-23	22:00	Cucuta vs Deportes Tolima	HOME	1	2.47	2.96	16.6	85	4%	1	253	PENDING	Drop 16.6% | Conf 85% | 253 snaps
+00:50:21	2026-02-23	23:00	Cruzeiro W vs Santos W	HOME	1	1.51	2.18	30.7	90	5%	1	254	PENDING	Drop 30.7% | Conf 90% | 254 snaps
+00:50:21	2026-02-25	14:30	Persebaya vs PSM Makassar	HOME	1	1.9	2.15	11.6	80	4%	1	23	PENDING	Drop 11.6% | Conf 80% | 23 snaps
+00:50:21	2026-02-25	20:30	Petrojet vs Al Ittihad	HOME	1	1.89	2.5	24.4	85	4%	1	163	PENDING	Drop 24.4% | Conf 85% | 163 snaps
+00:50:21	2026-02-25	21:00	San Martin S.J. vs Deportivo Madryn	DRAW	X	2.79	3.5	20.3	80	4%	1	252	PENDING	Drop 20.3% | Conf 80% | 252 snaps
+00:50:21	2026-02-28	15:00	Empoli vs Cesena	HOME	1	2.36	2.65	10.9	80	4%	1	13	PENDING	Drop 10.9% | Conf 80% | 13 snaps

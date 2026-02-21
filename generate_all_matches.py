@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Generate ALL_MATCHES TSV with odds movements for all tracked matches.
-Run manually whenever you need fresh data.
+Run manually whenever you need fresh data, or called automatically by runner.
 
 Usage: python generate_all_matches.py
 """
@@ -10,7 +10,8 @@ from pathlib import Path
 from collections import defaultdict
 from datetime import datetime
 
-def main():
+def generate_all_matches_tsv(verbose=True):
+    """Generate ALL_MATCHES TSV. Returns (path, count, steam_count)."""
     csv_dir = Path('odds_data/movement')
     today = datetime.now().strftime('%Y-%m-%d')
     
@@ -24,41 +25,52 @@ def main():
             today_files = sorted(csv_dir.glob(f'{latest_date}*.csv'))
             today = latest_date
     
-    print(f'📊 Generiranje ALL_MATCHES za {today}')
-    print(f'   Učitavam {len(today_files)} CSV fajlova...')
+    if verbose:
+        print(f'📊 Generiranje ALL_MATCHES za {today}')
+        print(f'   Učitavam {len(today_files)} CSV fajlova...')
     
-    # Collect first and last snapshot for each match
-    matches = defaultdict(lambda: {'first': None, 'last': None, 'count': 0})
+    if len(today_files) < 2:
+        if verbose:
+            print('   Nedovoljno fajlova za usporedbu')
+        return None, 0, 0
     
-    for fp in today_files:
-        try:
-            df = pd.read_csv(fp, sep=';', dtype=str)
-            for _, r in df.iterrows():
-                key = (r.get('home', ''), r.get('away', ''))
-                if not key[0]:
-                    continue
-                matches[key]['count'] += 1
-                matches[key]['last'] = r
-                if matches[key]['first'] is None:
-                    matches[key]['first'] = r
-        except Exception:
-            continue
+    # Load only first and last file for efficiency
+    first_file = today_files[0]
+    last_file = today_files[-1]
     
-    # Build rows
+    try:
+        df_first = pd.read_csv(first_file, sep=';', dtype=str)
+        df_last = pd.read_csv(last_file, sep=';', dtype=str)
+    except Exception as e:
+        if verbose:
+            print(f'   Greška pri čitanju: {e}')
+        return None, 0, 0
+    
+    # Index first file by (home, away)
+    first_odds = {}
+    for idx, r in df_first.iterrows():
+        key = (r.get('home', ''), r.get('away', ''))
+        if key[0]:
+            first_odds[key] = r
+    
+    # Build rows from last file
     rows = []
-    for key, data in matches.items():
-        if data['count'] < 10:
+    for idx, l in df_last.iterrows():
+        key = (l.get('home', ''), l.get('away', ''))
+        if not key[0]:
             continue
-        f, l = data['first'], data['last']
         if l.get('status') != 'upcoming':
             continue
         
+        f = first_odds.get(key)
+        has_first = f is not None
+        
         try:
-            o1 = float(f.get('odds_1', 0) or 0)
+            o1 = float(f.get('odds_1', 0) or 0) if has_first else 0
             l1 = float(l.get('odds_1', 0) or 0)
-            ox = float(f.get('odds_x', 0) or 0)
+            ox = float(f.get('odds_x', 0) or 0) if has_first else 0
             lx = float(l.get('odds_x', 0) or 0)
-            o2 = float(f.get('odds_2', 0) or 0)
+            o2 = float(f.get('odds_2', 0) or 0) if has_first else 0
             l2 = float(l.get('odds_2', 0) or 0)
         except Exception:
             continue
@@ -78,6 +90,9 @@ def main():
         match_date = l.get('match_date', today)
         kick_off = l.get('kick_off', '00:00')
         
+        # Count how many files have this match
+        snap_count = len(today_files) if has_first else 1
+        
         rows.append({
             'date': match_date,
             'kick_off': kick_off,
@@ -94,7 +109,7 @@ def main():
             'open_2': round(o2, 2) if o2 else '',
             'latest_2': round(l2, 2) if l2 else '',
             'change_2': f'{pct2:+.1f}%',
-            'snapshots': data['count'],
+            'snapshots': snap_count,
             'steam_on': ','.join(steam) if steam else ''
         })
     
@@ -108,11 +123,17 @@ def main():
     
     steam_count = len([r for r in rows if r['steam_on']])
     
-    print(f'')
-    print(f'✅ Spremljeno: {out_path}')
-    print(f'   Ukupno: {len(df_out)} utakmica')
-    print(f'   Sa STEAM (>=10%): {steam_count}')
-    print(f'   Sortirano po: date → kick_off')
+    if verbose:
+        print(f'')
+        print(f'✅ Spremljeno: {out_path}')
+        print(f'   Ukupno: {len(df_out)} utakmica')
+        print(f'   Sa STEAM (>=10%): {steam_count}')
+        print(f'   Sortirano po: date → kick_off')
+    
+    return out_path, len(df_out), steam_count
+
+def main():
+    generate_all_matches_tsv(verbose=True)
 
 if __name__ == '__main__':
     main()

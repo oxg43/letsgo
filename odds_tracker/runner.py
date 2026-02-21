@@ -68,6 +68,13 @@ try:
 except ImportError:
     PROFIT_MODE_AVAILABLE = False
 
+# Import ALL_MATCHES generator
+try:
+    from generate_all_matches import generate_all_matches_tsv
+    ALL_MATCHES_AVAILABLE = True
+except ImportError:
+    ALL_MATCHES_AVAILABLE = False
+
 # ── Future match cache (persists between cycles) ──
 FUTURE_MATCH_CACHE = DATA_DIR / "future_match_cache.json"
 
@@ -187,6 +194,14 @@ def run_one_cycle(cycle_num: int = 1, watch_list: list[str] | None = None, watch
     # Save CSV snapshot for later analysis
     csv_path = save_cycle_snapshot(matches, cycle_num)
     print(f"  [OK] Odds movement saved to {csv_path.name}")
+
+    # Auto-generate ALL_MATCHES TSV with movements
+    if ALL_MATCHES_AVAILABLE:
+        try:
+            tsv_path, total, steam = generate_all_matches_tsv(verbose=False)
+            print(f"  [OK] ALL_MATCHES updated: {total} matches, {steam} with STEAM")
+        except Exception as e:
+            print(f"  [!] ALL_MATCHES generation failed: {e}")
 
     # ── 2. ANALYZE ──
     print("\n[2/3] Analyzing market movements...")
