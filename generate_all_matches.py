@@ -12,7 +12,7 @@ from pathlib import Path
 from collections import defaultdict
 from datetime import datetime
 
-def generate_all_matches_tsv(verbose=True):
+def generate_all_matches_tsv(verbose=True, **kwargs):
     """Generate ALL_MATCHES TSV. Returns (path, count, steam_count)."""
     csv_dir = Path('odds_data/movement')
     today = datetime.now().strftime('%Y-%m-%d')
@@ -283,6 +283,15 @@ def generate_all_matches_tsv(verbose=True):
     
     # Create DataFrame and sort
     df_out = pd.DataFrame(rows)
+    
+    # Optional: filter by minimum kick_off time (set via env var or kwarg)
+    min_kickoff = kwargs.get('min_kickoff', None)
+    if min_kickoff and 'kick_off' in df_out.columns:
+        before = len(df_out)
+        df_out = df_out[df_out['kick_off'] >= min_kickoff].copy()
+        if verbose:
+            print(f'   Filter kick_off >= {min_kickoff}: {before} → {len(df_out)} utakmica')
+    
     df_out = df_out.sort_values(['date', 'kick_off'])
     
     # Save
@@ -290,6 +299,50 @@ def generate_all_matches_tsv(verbose=True):
     df_out.to_csv(out_path, sep='\t', index=False)
     
     steam_count = len([r for r in rows if r['steam_on']])
+    
+    # Auto-save R7 signals TSV + detect new signals
+    r7_path = None
+    new_r7_signals = []
+    if 'R7' in df_out.columns:
+        r7_df = df_out[df_out['R7'].notna() & (df_out['R7'] != '')].copy()
+        r7_df = r7_df.sort_values(['date', 'kick_off'])
+        r7_path = Path(f'odds_data/signal_map/R7_SIGNALS_{today}.tsv')
+
+        # Compare with previous R7 TSV to detect new signals
+        old_keys = set()
+        if r7_path.exists():
+            try:
+                old_r7 = pd.read_csv(r7_path, sep='\t', dtype=str)
+                for _, row in old_r7.iterrows():
+                    old_keys.add((row.get('home', ''), row.get('away', ''), row.get('date', '')))
+            except Exception:
+                pass
+
+        for _, row in r7_df.iterrows():
+            key = (row.get('home', ''), row.get('away', ''), row.get('date', ''))
+            if key not in old_keys:
+                new_r7_signals.append(row)
+
+        # Save the new TSV
+        r7_df.to_csv(r7_path, sep='\t', index=False)
+
+        # Always print new R7 signals (even when verbose=False)
+        if new_r7_signals:
+            print(f'\n  🆕 NOVI R7 SIGNALI ({len(new_r7_signals)}):')
+            print(f'  {"─"*70}')
+            for sig in new_r7_signals:
+                q = sig.get('R7_Q', '')
+                r7 = sig.get('R7', '')
+                dt = sig.get('date', '')
+                ko = sig.get('kick_off', '')
+                h = sig.get('home', '')
+                a = sig.get('away', '')
+                lg = sig.get('league', '')
+                print(f'  ⚡ {dt} {ko}  {h} vs {a}  │  {r7}  Q{q}  │  {lg}')
+            print(f'  {"─"*70}\n')
+
+        if verbose:
+            print(f'✅ R7 signali: {r7_path} ({len(r7_df)} mečeva)')
     
     if verbose:
         print(f'')
@@ -302,7 +355,12 @@ def generate_all_matches_tsv(verbose=True):
     return out_path, len(df_out), steam_count
 
 def main():
-    generate_all_matches_tsv(verbose=True)
+    import sys
+    kwargs = {}
+    for arg in sys.argv[1:]:
+        if arg.startswith('--from='):
+            kwargs['min_kickoff'] = arg.split('=', 1)[1]
+    generate_all_matches_tsv(verbose=True, **kwargs)
 
 if __name__ == '__main__':
     main()
