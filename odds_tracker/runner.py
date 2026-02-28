@@ -713,6 +713,89 @@ def run_continuous(watch_list: list[str] | None = None, watch_edge: float | None
         print(f"\n\n🛑 Stopped after {cycle} cycles. Generating final report...")
         generate_report()
 
+def run_r7_only(interval: int = 120, visible: bool = False):
+    """R7-only mode: scrape + compare R7 TSV, only print new signals."""
+    import subprocess
+    import pandas as pd
+
+    today = datetime.now().strftime('%Y-%m-%d')
+    r7_path = Path(f'odds_data/signal_map/R7_SIGNALS_{today}.tsv')
+
+    print(f"""
+╔══════════════════════════════════════════════════╗
+║      R7 SIGNAL MONITOR — samo novi signali       ║
+║  Refresh svakih {interval:3d}s  │  Ctrl+C za stop         ║
+╚══════════════════════════════════════════════════╝
+""", flush=True)
+
+    def _load_r7_keys(path):
+        """Load set of (home, away, date) from R7 TSV."""
+        keys = {}
+        if path.exists():
+            try:
+                df = pd.read_csv(path, sep='\t', dtype=str)
+                for _, row in df.iterrows():
+                    k = (row.get('home', ''), row.get('away', ''), row.get('date', ''))
+                    keys[k] = row
+            except Exception:
+                pass
+        return keys
+
+    try:
+        cycle = 0
+        while True:
+            cycle += 1
+            t0 = datetime.now()
+            today = t0.strftime('%Y-%m-%d')
+            r7_path = Path(f'odds_data/signal_map/R7_SIGNALS_{today}.tsv')
+
+            # Snapshot current R7 keys
+            old_keys = _load_r7_keys(r7_path)
+
+            print(f"[{t0.strftime('%H:%M:%S')}] Cycle #{cycle} scraping...", end=' ', flush=True)
+
+            # Run one cycle via subprocess (no stdout capture issues)
+            result = subprocess.run(
+                [str(Path('.venv/Scripts/python.exe')), '-m', 'odds_tracker.runner', '--once'],
+                capture_output=True, text=True, encoding='utf-8', errors='replace',
+                timeout=900, cwd=str(Path.cwd()),
+            )
+
+            elapsed = (datetime.now() - t0).total_seconds()
+
+            # Check for new R7 signals
+            new_keys = _load_r7_keys(r7_path)
+            added = {k: new_keys[k] for k in new_keys if k not in old_keys}
+
+            if added:
+                print(f"done ({elapsed:.0f}s)")
+                print(f"\n  🆕 NOVI R7 SIGNALI ({len(added)}):")
+                print(f"  {'─'*70}")
+                for (h, a, d), row in sorted(added.items(), key=lambda x: (x[0][2], x[1].get('kick_off', ''))):
+                    ko = row.get('kick_off', '')
+                    r7 = row.get('R7', '')
+                    q = row.get('R7_Q', '')
+                    lg = row.get('league', '')
+                    print(f"  ⚡ {d} {ko}  {h} vs {a}  │  {r7}  Q{q}  │  {lg}")
+                print(f"  {'─'*70}")
+            else:
+                print(f"ok ({elapsed:.0f}s) — nema novih R7  [ukupno: {len(new_keys)}]")
+
+            if result.returncode != 0:
+                # Log errors silently to file
+                err_file = Path('odds_data/r7_monitor_errors.log')
+                with open(err_file, 'a', encoding='utf-8') as f:
+                    f.write(f"\n--- Cycle {cycle} @ {t0} ---\n")
+                    f.write(result.stderr[-500:] if result.stderr else "no stderr\n")
+
+            next_t = datetime.now() + timedelta(seconds=interval)
+            print(f"    ⏰ Sljedeći: {next_t.strftime('%H:%M:%S')}\n", flush=True)
+            time.sleep(interval)
+
+    except KeyboardInterrupt:
+        print(f"\n🛑 Zaustavljeno nakon {cycle} ciklusa.")
+
+
 def show_current_signals():
     """Show all signals generated today."""
     init_db()
@@ -857,6 +940,7 @@ def main():
     parser.add_argument('--visible', action='store_true', help='Show browser window')
     parser.add_argument('--signalmap', action='store_true', help='Show today\'s signal map')
     parser.add_argument('--live', action='store_true', help='Scrape live in-play matches only')
+    parser.add_argument('--r7', action='store_true', help='R7-only mode: quiet output, only show new R7 signals')
     parser.add_argument('--watch', nargs='*', help='Watch specific matches for pre-goal alerts (e.g., "Pouso Alegre vs Democrata GV")')
     parser.add_argument('--watch-edge', type=float, help='Min edge to alert (decimal, e.g., 0.12 = 12%)')
     parser.add_argument('--watch-delta', type=float, help='Min edge jump to alert (decimal, e.g., 0.05 = +5%)')
@@ -880,6 +964,8 @@ def main():
     elif args.live:
         init_db()
         _run_live_only()
+    elif args.r7:
+        run_r7_only(interval=args.interval, visible=not HEADLESS if args.visible else False)
     elif args.signals:
         show_current_signals()
     elif args.once:

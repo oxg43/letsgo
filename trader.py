@@ -826,8 +826,41 @@ def _recalc_cumulative(trades, account=None):
 # ═══════════════════════════════════════════════════════════════════════════
 #  RESULT UPDATER (--update)
 # ═══════════════════════════════════════════════════════════════════════════
+def _resolve_trade(trade, score_str):
+    """Resolve a single trade given a score string 'H-A'. Returns True if resolved."""
+    try:
+        parts = score_str.split("-")
+        home_goals = int(parts[0].strip())
+        away_goals = int(parts[1].strip())
+    except (ValueError, IndexError):
+        return False
+
+    if home_goals > away_goals:
+        actual = "HOME"
+    elif away_goals > home_goals:
+        actual = "AWAY"
+    else:
+        actual = "DRAW"
+
+    predicted = trade.get("predicted_outcome", "")
+    odds = float(trade.get("odds_at_signal", 0) or 0)
+    stake_eur = float(trade.get("stake_eur", 0) or 0)
+
+    if actual == predicted:
+        profit = round(stake_eur * (odds - 1), 2)
+        trade["status"] = "won"
+    else:
+        profit = round(-stake_eur, 2)
+        trade["status"] = "lost"
+
+    trade["actual_result"] = actual
+    trade["actual_score"] = score_str
+    trade["profit_loss"] = profit
+    return True
+
+
 def run_update():
-    """Update results for pending trades using latest movement data."""
+    """Update results for pending trades using movement data + OddsPortal scraping."""
     print("═" * 70)
     print(f"  RESULT UPDATER — {NOW.strftime('%Y-%m-%d %H:%M:%S')}")
     print("═" * 70)
@@ -841,61 +874,83 @@ def run_update():
     
     print(f"  Pending trades: {len(pending)}")
     
-    # Load latest movement data to find finished matches
-    df = load_movement_data(days_back=3)
-    if df.empty:
-        print("  [!] Nema movement podataka.")
-        return
-    
-    # Get latest status for each match
-    latest = df.sort_values("scraped_at").groupby("match_id").last()
+    # ── Phase 1: Try movement data first ──────────────────────────────────
+    print("\n  ── Phase 1: Movement data ──")
+    df = load_movement_data(days_back=5)
     
     updated = 0
-    for trade in pending:
-        match_id = trade.get("match_id", "")
-        if match_id not in latest.index:
-            continue
+    still_pending = []
+    
+    if not df.empty:
+        latest = df.sort_values("scraped_at").groupby("match_id").last()
         
-        match_row = latest.loc[match_id]
-        status = str(match_row.get("status", "")).strip().lower()
-        score = str(match_row.get("score", "")).strip()
+        for trade in pending:
+            match_id = trade.get("match_id", "")
+            if match_id in latest.index:
+                match_row = latest.loc[match_id]
+                status = str(match_row.get("status", "")).strip().lower()
+                score = str(match_row.get("score", "")).strip()
+                
+                if status == "finished" and score and score != "nan":
+                    if _resolve_trade(trade, score):
+                        updated += 1
+                        emoji = '✅' if trade['status'] == 'won' else '❌'
+                        print(f"  {emoji} {trade['home']} vs {trade['away']} "
+                              f"→ {score} ({trade['actual_result']}) | P/L: {trade['profit_loss']:+.2f}€")
+                        continue
+            still_pending.append(trade)
+    else:
+        still_pending = list(pending)
+    
+    print(f"  Phase 1 resolved: {updated} trades")
+    
+    # ── Phase 2: Scrape OddsPortal for remaining pending trades ─────────
+    # Only scrape for trades whose date is in the past (match should be finished)
+    today_str = NOW.strftime("%Y-%m-%d")
+    past_trades = []
+    for trade in still_pending:
+        trade_date = str(trade.get("date", "")).strip()
+        if trade_date and trade_date < today_str:
+            past_trades.append(trade)
+
+    if past_trades:
+        # Collect unique dates to scrape
+        dates_to_scrape = sorted(set(str(t.get("date", "")).strip() for t in past_trades))
+        print(f"\n  ── Phase 2: Scraping OddsPortal results for {len(dates_to_scrape)} past dates ──")
+        print(f"  Dates: {', '.join(dates_to_scrape)}")
+        print(f"  Trades to resolve: {len(past_trades)}")
         
-        if status != "finished" or not score or score == "nan":
-            continue
-        
-        # Parse score "H-A"
         try:
-            parts = score.split("-")
-            home_goals = int(parts[0].strip())
-            away_goals = int(parts[1].strip())
-        except (ValueError, IndexError):
-            continue
-        
-        # Determine actual result
-        if home_goals > away_goals:
-            actual = "HOME"
-        elif away_goals > home_goals:
-            actual = "AWAY"
-        else:
-            actual = "DRAW"
-        
-        predicted = trade.get("predicted_outcome", "")
-        odds = float(trade.get("odds_at_signal", 0) or 0)
-        stake_eur = float(trade.get("stake_eur", 0) or 0)
-        
-        if actual == predicted:
-            profit = round(stake_eur * (odds - 1), 2)
-            trade["status"] = "won"
-        else:
-            profit = round(-stake_eur, 2)
-            trade["status"] = "lost"
-        
-        trade["actual_result"] = actual
-        trade["actual_score"] = score
-        trade["profit_loss"] = profit
-        updated += 1
-        print(f"  {'✅' if trade['status'] == 'won' else '❌'} {trade['home']} vs {trade['away']} "
-              f"→ {score} ({actual}) | P/L: {profit:+.2f}€")
+            from odds_tracker.scraper import scrape_results_for_dates
+            results = scrape_results_for_dates(dates_to_scrape, headless=True)
+            
+            # Build lookup: (home, away) → score
+            result_lookup = {}
+            for r in results:
+                key = f"{r['home']}|{r['away']}"
+                if r.get('score'):
+                    result_lookup[key] = r['score']
+            
+            print(f"  Scraped {len(results)} finished matches, {len(result_lookup)} with scores")
+            
+            phase2_resolved = 0
+            for trade in past_trades:
+                match_id = trade.get("match_id", "")
+                if match_id in result_lookup:
+                    score = result_lookup[match_id]
+                    if _resolve_trade(trade, score):
+                        phase2_resolved += 1
+                        updated += 1
+                        emoji = '✅' if trade['status'] == 'won' else '❌'
+                        print(f"  {emoji} {trade['home']} vs {trade['away']} "
+                              f"→ {score} ({trade['actual_result']}) | P/L: {trade['profit_loss']:+.2f}€")
+            
+            print(f"  Phase 2 resolved: {phase2_resolved} trades")
+            
+        except Exception as e:
+            print(f"  [!] Scraping failed: {e}")
+            import traceback
+            traceback.print_exc()
     
     # Recalculate cumulative PnL
     _recalc_cumulative(trades)
@@ -906,7 +961,8 @@ def run_update():
         shutil.copy2(TRADES_FILE, backup_path)
     
     save_trades(trades)
-    print(f"\n  Updated: {updated} trades")
+    print(f"\n  ═══ SUMMARY ═══")
+    print(f"  Updated: {updated} trades")
     print(f"  Remaining pending: {len([t for t in trades if t.get('status') == 'pending'])}")
 
 

@@ -449,6 +449,91 @@ def scrape_odds(url: str, headless: bool = True, timeout_ms: int = 60000) -> lis
     return all_matches
 
 
+def scrape_results_for_dates(dates: list[str], headless: bool = True, timeout_ms: int = 60000) -> list[dict]:
+    """
+    Scrape finished match results from OddsPortal for a list of dates.
+    dates: list of 'YYYY-MM-DD' strings (e.g. ['2026-02-24', '2026-02-25'])
+    Returns list of dicts with: home, away, score, status, kick_off, country, league, odds_1, odds_x, odds_2
+    Only returns matches with status='finished'.
+    """
+    all_results = []
+    seen_keys = set()
+
+    with sync_playwright() as pw:
+        browser = _launch_browser(pw, headless=headless)
+        page = _create_page(browser)
+
+        try:
+            for date_str in dates:
+                compact = date_str.replace('-', '')
+                url = f"https://www.oddsportal.com/matches/football/{compact}/"
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Scraping results for {date_str} ...")
+
+                try:
+                    page.goto(url, wait_until='networkidle', timeout=timeout_ms)
+                except Exception as e:
+                    print(f"  [!] Failed to load {date_str}: {e}")
+                    continue
+
+                # Handle cookie consent
+                try:
+                    accept_btn = page.locator('button:has-text("I Accept")')
+                    if accept_btn.count() > 0:
+                        accept_btn.first.click()
+                        time.sleep(2)
+                except Exception:
+                    pass
+
+                _close_modals(page)
+                time.sleep(1)
+
+                page_num = 1
+                max_pages = 15
+
+                while page_num <= max_pages:
+                    _scroll_and_expand(page)
+                    page.evaluate("window.scrollTo(0, 0)")
+                    time.sleep(0.5)
+
+                    full_text = page.evaluate("() => document.body.innerText")
+                    page_matches = _parse_from_text(full_text)
+
+                    new_count = 0
+                    for m in page_matches:
+                        if m.get('status') != 'finished':
+                            continue
+                        key = (date_str, m['home'], m['away'])
+                        if key not in seen_keys:
+                            seen_keys.add(key)
+                            m['date'] = date_str
+                            all_results.append(m)
+                            new_count += 1
+
+                    print(f"  Page {page_num}: {new_count} finished matches (total: {len(all_results)})")
+
+                    if new_count == 0 and page_num > 1:
+                        break
+
+                    if _has_next_page(page):
+                        if _click_next_page(page):
+                            page_num += 1
+                            continue
+                    break
+
+        except Exception as e:
+            print(f"[{datetime.now().strftime('%H:%M:%S')}] Results scraping error: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            try:
+                browser.close()
+            except Exception:
+                pass  # Browser may already be closed
+
+    print(f"[{datetime.now().strftime('%H:%M:%S')}] Total finished results scraped: {len(all_results)}")
+    return all_results
+
+
 def scrape_match_detail(url: str, headless: bool = True, timeout_ms: int = 30000) -> dict:
     """
     Scrape detailed odds from a specific match page.
