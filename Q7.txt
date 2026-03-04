@@ -1,0 +1,51 @@
+================================================================================
+Q7 SIGNALS - DANAS Project
+Generated: 2026-03-04 23:39 UTC
+Source: output/alerts/2026-03-04_0039.csv
+================================================================================
+
+Q7 SIGNALS (Score 90+ with CORRECTION_UP - Highest Quality):
+--------------------------------------------------------------------------------
+Match                                              | League            | Odds | Signal     | Breakdown
+--------------------------------------------------------------------------------
+Gimcheon Sangmu vs Jeonbuk                        | K League 1        | 2.84 | CORRECTION | smooth(+20) slow(+15) orc_ok(+15) weak_ctr(+15) not_late(+10) not_fav(+10) sweet(+5)
+Sturm Graz vs Altach                              | Austria Bundesliga| 2.00 | CORRECTION | smooth(+20) slow(+15) orc_ok(+15) weak_ctr(+15) not_late(+10) not_fav(+10) sweet(+5)
+Babelsberg vs Eilenburg                           | Regionalliga Nord | 3.93 | CORRECTION | smooth(+20) slow(+15) orc_ok(+15) weak_ctr(+15) not_late(+10) not_fav(+10) sweet(+5)
+Helmond vs Oss                                    | Eerste Divisie    | 3.40 | CORRECTION | smooth(+20) slow(+15) orc_ok(+15) weak_ctr(+15) not_late(+10) not_fav(+10) sweet(+5)
+Meux vs Habay La Neuve                           | National Div 1    | 2.52 | CORRECTION | smooth(+20) slow(+15) orc_ok(+15) weak_ctr(+15) not_late(+10) not_fav(+10) sweet(+5)
+OC Charleroi U21 vs Westerlo U21                  | Pro League U21    | 3.79 | CORRECTION | smooth(+20) slow(+15) orc_ok(+15) weak_ctr(+15) not_late(+10) not_fav(+10) sweet(+5)
+New York City vs Orlando City                     | MLS               | 3.97 | CORRECTION | smooth(+20) slow(+15) orc_ok(+15) weak_ctr(+15) not_late(+10) not_fav(+10) sweet(+5)
+Aucas vs Dep. Cuenca                             | Liga Pro          | 1.80 | CORRECTION | smooth(+20) slow(+15) orc_ok(+15) weak_ctr(+15) not_late(+10) sweet(+5)
+Royal Union SG 2 vs Namur                        | National Div 1    | 1.84 | CORRECTION | smooth(+20) slow(+15) orc_ok(+15) weak_ctr(+15) not_late(+10) sweet(+5)
+Union Rochefortoise vs Tubize-Braine             | National Div 1    | 1.81 | CORRECTION | smooth(+20) slow(+15) orc_ok(+15) weak_ctr(+15) not_late(+10) sweet(+5)
+Virton vs Renaissance Mons                       | National Div 1    | 1.98 | CORRECTION | smooth(+20) slow(+15) orc_ok(+15) weak_ctr(+15) not_late(+10) sweet(+5)
+Etoile-Carouge vs Aarau                         | Challenge League  | 1.85 | CORRECTION | smooth(+20) slow(+15) orc_ok(+15) weak_ctr(+15) not_late(+10) sweet(+5)
+Wollongong Wolves vs Sydney FC U23               | NPL NSW           | 2.42 | CORRECTION | smooth(+20) slow(+15) weak_ctr(+15) not_late(+10) not_fav(+10) sweet(+5)
+Haiti U20 vs Curacao U20                        | CONCACAF U20      | 2.53 | CORRECTION | smooth(+20) orc_ok(+15) weak_ctr(+15) not_late(+10) not_fav(+10) sweet(+5)
+Szeged vs Mezokovesd-Zsory                       | NB II.            | 2.32 | CORRECTION | smooth(+20) orc_ok(+15) weak_ctr(+15) not_late(+10) not_fav(+10) sweet(+5)
+Krylya Sovetov vs Orenburg                       | Russian Cup       | 3.55 | CORRECTION | smooth(+20) slow(+15) orc_ok(+15) not_late(+10) not_fav(+10) sweet(+5)
+Coruxo FC vs Langreo                            | Segunda RFEF      | 3.32 | CORRECTION | smooth(+20) slow(+15) weak_ctr(+15) not_late(+10) not_fav(+10) sweet(+5)
+Carrarese vs Palermo                             | Serie B           | 2.05 | CORRECTION | smooth(+20) slow(+15) weak_ctr(+15) not_late(+10) not_fav(+10) sweet(+5)
+Liefering vs Bregenz                            | 2. Liga Austria   | 3.98 | CORRECTION | smooth(+20) slow(+15) weak_ctr(+15) not_late(+10) not_fav(+10) sweet(+5)
+Ceramica Cleopatra vs National Bank Egypt        | Premier League    | 2.40 | CORRECTION | smooth(+20) slow(+15) weak_ctr(+15) not_late(+10) not_fav(+10) sweet(+5)
+Stal Mielec vs Tychy                            | Division 1 Poland | 2.50 | CORRECTION | smooth(+20) slow(+15) weak_ctr(+15) not_late(+10) not_fav(+10) sweet(+5)
+Banks O' Dee vs Buckie Thistle                  | Highland League   | 3.79 | CORRECTION | smooth(+20) slow(+15) weak_ctr(+15) not_late(+10) not_fav(+10) sweet(+5)
+Sao-Carlense vs Barretos EC                     | Paulista A4       | 3.07 | CORRECTION | smooth(+20) orc_ok(+15) weak_ctr(+15) not_late(+10) not_fav(+10) sweet(+5)
+
+================================================================================
+TOTAL SIGNALS: 23 high-quality CORRECTION_UP signals (score 90)
+================================================================================
+
+All Q7 Signals Summary (March 4, 2026):
+- Total matches with signals: 138
+- Score 90 (highest): 64 matches
+- Score 80: 37 matches  
+- Score 75: 30 matches
+- Score 70: 7 matches
+
+Signal Types:
+- CORRECTION_UP: Strong reversal signals
+- NEGLECT_UP: Value signals
+- DRIFT_UP: Momentum signals
+
+================================================================================
