@@ -88,7 +88,7 @@ Ovo je **čitav** trenutni kod koji trebaš modificirati. Čitaj ga pažljivo da
   CLI:
     python trader.py --scan              Prikaži trenutne R7 signale
     python trader.py --report            Dnevni izvještaj
-    python trader.py --update            Updejta rezultate završenih mečeva
+   python trader.py --report            Updejta rezultate završenih mečeva
     python trader.py --weekly            Tjedni validacijski report
     python trader.py --watch             Kontinuirano praćenje (svake 3 min)
 ═══════════════════════════════════════════════════════════════════════════════

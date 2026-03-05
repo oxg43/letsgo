@@ -4,7 +4,7 @@ Continuously scrapes OddsPortal, analyzes market movements,
 and generates betting signals.
 
 Usage:
-    python -m odds_tracker.runner              # Run continuously (default: every 2 min)
+python -m odds_tracker.runner --once          # Run continuously (default: every 2 min)
     python -m odds_tracker.runner --once       # Run one cycle
     python -m odds_tracker.runner --report     # Generate end-of-day report
     python -m odds_tracker.runner --signals    # Show current signals
