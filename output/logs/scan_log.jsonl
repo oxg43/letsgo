@@ -3665,3 +3665,4 @@
 {"timestamp": "2026-03-12T09:10:33.195686", "threshold": 70, "total_upcoming": 1693, "signals_found": 154, "avg_quality": 80.0, "med_speed": 0.054, "med_counter": 6.436}
 {"timestamp": "2026-03-12T15:34:32.538035", "threshold": 70, "total_upcoming": 1735, "signals_found": 139, "avg_quality": 79.6, "med_speed": 0.052, "med_counter": 6.436}
 {"timestamp": "2026-03-12T15:46:24.530587", "threshold": 70, "total_upcoming": 1732, "signals_found": 140, "avg_quality": 79.6, "med_speed": 0.053, "med_counter": 6.618}
+{"timestamp": "2026-03-14T19:02:39.742128", "threshold": 70, "total_upcoming": 1755, "signals_found": 105, "avg_quality": 77.1, "med_speed": 0.064, "med_counter": 6.061}
