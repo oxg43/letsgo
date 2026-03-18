@@ -3666,3 +3666,8 @@
 {"timestamp": "2026-03-12T15:34:32.538035", "threshold": 70, "total_upcoming": 1735, "signals_found": 139, "avg_quality": 79.6, "med_speed": 0.052, "med_counter": 6.436}
 {"timestamp": "2026-03-12T15:46:24.530587", "threshold": 70, "total_upcoming": 1732, "signals_found": 140, "avg_quality": 79.6, "med_speed": 0.053, "med_counter": 6.618}
 {"timestamp": "2026-03-14T19:02:39.742128", "threshold": 70, "total_upcoming": 1755, "signals_found": 105, "avg_quality": 77.1, "med_speed": 0.064, "med_counter": 6.061}
+{"timestamp": "2026-03-16T09:12:52.060234", "threshold": 70, "total_upcoming": 1032, "signals_found": 127, "avg_quality": 81.0, "med_speed": 0.158, "med_counter": 4.475}
+{"timestamp": "2026-03-16T12:22:05.816218", "threshold": 70, "total_upcoming": 1102, "signals_found": 116, "avg_quality": 80.2, "med_speed": 0.157, "med_counter": 4.478}
+{"timestamp": "2026-03-16T12:33:00.537290", "threshold": 70, "total_upcoming": 1104, "signals_found": 125, "avg_quality": 79.8, "med_speed": 0.157, "med_counter": 4.486}
+{"timestamp": "2026-03-17T10:15:45.915651", "threshold": 70, "total_upcoming": 1224, "signals_found": 146, "avg_quality": 80.9, "med_speed": 0.128, "med_counter": 3.951}
+{"timestamp": "2026-03-18T16:37:59.624833", "threshold": 70, "total_upcoming": 1449, "signals_found": 145, "avg_quality": 79.6, "med_speed": 0.048, "med_counter": 5.229}
